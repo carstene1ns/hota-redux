@@ -1,0 +1,9 @@
+1.2.1
+  - Added scaler2x effect
+  - Added scaler3x effect
+  - Added simple x3 scaler
+  - Fixed sound effects
+  - Major code cleanups
+
+1.2.0
+  - First public release!
