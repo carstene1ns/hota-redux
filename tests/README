@@ -1,0 +1,8 @@
+These are the test files used for debugging Heart of The Alien.
+To try them out, rename such a file to "recorded-keys" and place it
+in the same directory as "Alien" executable, and run Alien with
+--replay, and --room with the room specified below.
+
+recorded-keys.level1 (room 1)
+recorded-keys.level2 (room 2)
+recorded-keys.boss (room 7, enter password to start at boss level)

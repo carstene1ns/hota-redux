@@ -4,7 +4,7 @@ Heart of The Alien Redux
 Thank you for downloading Heart of The Alien Redux! 
 This rewrite brings the wonderful game to modern computers and consoles. 
 
-For more information, please visit the project home at
+For more information, please visit the project homepage at
 http://hota.sourceforge.net/
 
 NOTE
@@ -19,7 +19,7 @@ USAGE
         it plays the introduction, and then pops up the code entry screen.
 
         Running ``alien -h'' will display a list of acceptable parameters. 
-        Here are some interestings settings:
+        Here are some interesting settings:
 
         --iso                  use iso and mp3s, as noted above
         --double               double size window
@@ -48,25 +48,27 @@ BUGS
         The final version will be announced when no more bug reports have
         been received, and no request for features posted. You are more 
         than welcome to report a bug on the SourceForge project 
-        page (see links below.)
+        page (see links below.) When submitting a bug, if possible, please
+        record your keys and attach ``recorded-keys'', or attach a
+        ``quicksave'' file to help reproduce the problem.
 
         * BUG: during introduction, there is no horizontal scroll when
           the female passes the screen.
 
-        * BUG: horizontal vibration is missing in introduction
+        * BUG: earthquake is missing in introduction
 
 FAQ
 
         Q: Why can't I play Another World (or Out of This World.)
         A: This project is for Heart of The Alien, Another World was
-           attached to HOTA as bonus (or to increase sales.) All AW projects
-           were removed; you may still play it on modern computers using
+           attached to HOTA as bonus (or to increase sales.) You may 
+           still play it on modern computers using 
            dosbox (http://dosbox.sourceforge.net) or 
            bochs (http://bochs.sourceforge.net)
 
         Q: I think I found a bug!
         A: Some of the bugs you may find also appear in the original game.
-           There are plenty known. Only one has been checked and found
+           There are plenty suspected. Only one has been checked and found
            faulty in the Sega CD version as well:
            * First screen, run left, quickly run right (away from the beast,)
              and run left again. Beast is gone.
