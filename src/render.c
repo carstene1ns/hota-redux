@@ -18,19 +18,41 @@
  */
 #include <string.h>
 #include <SDL.h>
+#include "debug.h"
 #include "render.h"
+#include "game2bin.h"
 
+#include "scale2x.h"
+#include "scale3x.h"
+
+static int fullscreen = 0;
 static int scroll_reg = 0;
 
 extern int fullscreen_flag;
-extern int double_flag;
+extern int filtered_flag;
+extern int scale;
 extern int palette_changed;
 extern SDL_Color palette[256];
 extern SDL_Surface *screen;
 
+static int palette_changed = 0;
+static int current_palette = 0;
+static SDL_Color palette[256];
+
+int get_current_palette()
+{
+	return current_palette;
+}
+
+/* set scroll register */
 void set_scroll(int scroll)
 {
 	scroll_reg = scroll;
+}
+
+int get_scroll_register()
+{
+	return scroll_reg;
 }
 
 void render1x(char *src)
@@ -75,6 +97,19 @@ void render1x(char *src)
 	}
 }
 
+/* advmame2x scaler */
+void render2x_scaled(char *src)
+{
+	scale2x(screen, src, 304, 304, 192);
+}
+
+/* advmame3x scaler */
+void render3x_scaled(char *src)
+{
+	scale3x(screen, src, 304, 304, 192);
+}
+
+/* simple x2 scaler */
 void render2x(char *src)
 {
 	int x, y;
@@ -97,12 +132,34 @@ void render2x(char *src)
 	}
 }
 
+/* simple x3 scaler */
+void render3x(char *src)
+{
+	int x, y;
+	unsigned char wide[304*3];
+        
+	for (y=0; y<192; y++)
+	{
+		unsigned char *srcp, *widep;
+
+		srcp = src + 304*y;
+		widep = wide;
+		for (x=0; x<304; x++)
+		{
+			*widep++ = *srcp;
+			*widep++ = *srcp;
+			*widep++ = *srcp++;
+		}
+
+		memcpy((char *)screen->pixels + y*3*screen->pitch, wide, 304*3);
+		memcpy((char *)screen->pixels + (y*3+1)*screen->pitch, wide, 304*3);
+		memcpy((char *)screen->pixels + (y*3+2)*screen->pitch, wide, 304*3);
+	}
+}
+
+/* render a virtual screen */
 void render(unsigned char *src)
 {
-	int is_double;
-
-	is_double = double_flag && (fullscreen_flag == 0);
-
 	SDL_LockSurface(screen);
 
 	if (palette_changed)
@@ -111,16 +168,132 @@ void render(unsigned char *src)
 		SDL_SetColors(screen, palette, 0, 256);
 	}
 
-	if (is_double == 0)
+	switch(scale)
 	{
+		case 1:
 		/* normal 1x */
 		render1x(src);
-	}
-	else
-	{
-		render2x(src);
+		break;
+
+		case 2:
+		if (filtered_flag == 0)
+		{
+			render2x(src);
+		}
+		else
+		{
+			render2x_scaled(src);
+		}
+		break;
+
+		case 3:
+		if (filtered_flag == 0)
+		{
+			render3x(src);
+		}
+		else
+		{
+			render3x_scaled(src);
+		}
+		break;
 	}
 
 	scroll_reg = 0;
 	SDL_UnlockSurface(screen);
+}
+
+/* module initializer */
+int render_init()
+{
+	return 0;
+}
+
+/* convert a Sega CD RGB444 to RGB888 */
+void set_palette_rgb12(unsigned char *rgb12)
+{
+	int i;
+
+	for (i=0; i<256; i++)
+	{
+		int c, r, g, b;
+
+		c = (rgb12[i*2] << 8) | rgb12[i*2+1];
+		r = (c & 0xf) << 4;
+		g = ((c >> 4) & 0xf) << 4;
+		b = ((c >> 8) & 0xf) << 4;
+
+		palette[i].r = r;
+		palette[i].g = g;
+		palette[i].b = b;
+	}
+
+	palette_changed = 1;
+}
+
+void set_palette(int which)
+{
+	unsigned char rgb12[16*2];
+
+	copy_from_game2bin(rgb12, 0x5cb8 + (which * 16 * 2), sizeof(rgb12));
+
+	current_palette = which;
+	set_palette_rgb12(rgb12);
+
+	palette[255].r = 255;
+	palette[255].g = 0;
+	palette[255].b = 255;
+}
+
+void toggle_fullscreen()
+{
+	/* hack, fullscreen not supported at scale==3 */
+	if (scale == 3)
+	{
+		return;
+	}
+
+	fullscreen = 1 - fullscreen;
+	SDL_FreeSurface(screen);
+	screen = 0;
+
+	if (fullscreen == 0)
+	{
+		LOG(("create SDL surface of 304x192x8\n"));
+
+		screen = SDL_SetVideoMode(304*scale, 192*scale, 8, SDL_SWSURFACE);
+		SDL_SetColors(screen, palette, 0, 256);
+		SDL_ShowCursor(1);
+	}
+	else
+	{
+		int w, h;
+
+		w = 320*scale;
+		h = 200*scale;
+
+		LOG(("setting fullscreen mode %dx%dx8\n", w, h));
+
+		screen = SDL_SetVideoMode(w, h, 8, SDL_SWSURFACE|SDL_HWSURFACE|SDL_FULLSCREEN);
+
+		SDL_SetColors(screen, palette, 0, 256);
+		SDL_ShowCursor(0);
+	}
+}
+
+int render_create_surface()
+{
+	screen = SDL_SetVideoMode(304*scale, 192*scale, 8, SDL_SWSURFACE);
+	if (screen == NULL) 
+	{
+		return -1;
+	}
+
+	SDL_WM_SetCaption("Heart of The Alien Redux", 0);
+
+	if (fullscreen_flag)
+	{
+		toggle_fullscreen();
+	}
+
+	return 0;
 }

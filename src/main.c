@@ -35,6 +35,7 @@
 #include "render.h"
 #include "screen.h"
 #include "sprites.h"
+#include "game2bin.h"
 #include "animation.h"
 
 #ifdef WIN32
@@ -53,21 +54,17 @@ extern int pc;
 
 extern unsigned char memory[];
 extern unsigned short variables[];
-extern unsigned short auxvars[];
 
 int quit = 0;
 int next_script;
 int current_backdrop;
 int current_room;
 
+int filtered_flag = 0;
 int speed_throttle = 0;
-int fullscreen = 0;
-int palette_changed = 0;
-int current_palette = 0;
-SDL_Color palette[256];
+int scale = 1;
 
 int iso_flag = 0;
-int double_flag = 0;
 int nosound_flag = 0;
 int debug_flag = 0;
 int test_flag = 0;
@@ -75,7 +72,6 @@ int record_flag = 0;
 int replay_flag = 0;
 int fullscreen_flag = 0;
 int fastest_flag = 0;
-char game2bin[409600];
 
 short task_pc[64];
 short new_task_pc[64];
@@ -92,41 +88,6 @@ SDL_Surface *screen;
 #ifdef ENABLE_DEBUG
 short old_var[256+64*32];
 #endif
-
-void set_palette_rgb12(unsigned char *rgb12)
-{
-	int i;
-
-	for (i=0; i<256; i++)
-	{
-		int c, r, g, b;
-
-		c = (rgb12[i*2] << 8) | rgb12[i*2+1];
-		r = (c & 0xf) << 4;
-		g = ((c >> 4) & 0xf) << 4;
-		b = ((c >> 8) & 0xf) << 4;
-
-		palette[i].r = r;
-		palette[i].g = g;
-		palette[i].b = b;
-	}
-
-	palette_changed = 1;
-}
-
-void set_palette(int which)
-{
-	unsigned char rgb12[16*2];
-	
-	memcpy(rgb12, game2bin + 0x5cb8 + (which * 16 * 2), sizeof(rgb12));
-
-	current_palette = which;
-	set_palette_rgb12(rgb12);
-
-	palette[255].r = 255;
-	palette[255].g = 0;
-	palette[255].b = 255;
-}
 
 static int load_room(int index)
 {
@@ -147,27 +108,6 @@ static int load_room(int index)
 	sound_flush_cache();
 
 	return 0;
-}
-
-void toggle_fullscreen()
-{
-	fullscreen ^= 1;
-
-	SDL_FreeSurface(screen);
-	screen = 0;
-
-	if (fullscreen == 0)
-	{
-		screen = SDL_SetVideoMode(304*(1+double_flag), 192*(1+double_flag), 8, SDL_SWSURFACE);
-		SDL_SetColors(screen, palette, 0, 256);
-		SDL_ShowCursor(1);
-	}
-	else
-	{
-		screen = SDL_SetVideoMode(320, 200, 8, SDL_SWSURFACE|SDL_HWSURFACE|SDL_FULLSCREEN);
-		SDL_SetColors(screen, palette, 0, 256);
-		SDL_ShowCursor(0);
-	}
 }
 
 static void atexit_callback(void)
@@ -192,29 +132,25 @@ static int initialize()
 		sound_init();
 	}
 
-	if (read_file("GAME2.BIN", game2bin) < 0)
+	if (render_init() < 0)
+	{
+		panic("failed to initialize renderer module");
+	}
+
+	if (game2bin_init() < 0)
 	{
 		panic("can't read GAME2.BIN file");
 	}
 
-	screen = SDL_SetVideoMode(304*(1+double_flag), 192*(1+double_flag), 8, SDL_SWSURFACE);
-	if (screen == NULL) 
-	{
-	        fprintf(stderr, "Unable to set 304x192 video: %s\n", SDL_GetError());
-        	exit(1);
-	}
-
-	SDL_WM_SetCaption("Heart of The Alien Redux", 0);
 
 	screen_init();
 	
-	pc = 0;
-	memset(variables, '\0', 256*sizeof(variables[0]));
-	variables[227] = 1;
+	vm_reset();
+	set_variable(227, 1);
 
-	if (fullscreen_flag)
+	if (render_create_surface() < 0)
 	{
-		toggle_fullscreen();
+		panic("failed to create video surface");
 	}
 
 	return 0;
@@ -347,6 +283,7 @@ void update_keys()
 void quickload()
 {
 	int i, j;
+	int palette_used;
 	FILE *fp;
 
 	fp = fopen(QUICKSAVE_FILENAME, "rb");
@@ -357,11 +294,11 @@ void quickload()
 
 	current_room = fgetc(fp);
 	current_backdrop = fgetc(fp);
-	current_palette = fgetc(fp);
+	palette_used = fgetc(fp);
 
 	load_room(current_room);
 	load_room_screen(0, current_backdrop);
-	set_palette(current_palette);
+	set_palette(palette_used);
 
 	/* must be ran out of thread loop, so no active thread */
 	toggle_aux(0);
@@ -440,7 +377,7 @@ void quicksave()
 
 	fputc(current_room, fp);
 	fputc(current_backdrop, fp);
-	fputc(current_palette, fp);
+	fputc(get_current_palette(), fp);
 
 	/* must be ran out of thread loop, so no active thread */
 	toggle_aux(0);
@@ -881,7 +818,7 @@ void sprite_test()
 
 	redraw = 1;
 	set_palette(0x11);
-	SDL_SetColors(screen, palette, 0, 256);
+	//FIXME: SDL_SetColors(screen, palette, 0, 256);
 	while (quit == 0)
 	{
 		int a4;
@@ -968,7 +905,9 @@ static void help()
 	puts("\t--debug        turn on debugging");
 	#endif
 	puts("\t--iso          use iso and mp3s (in current directory)");
-	puts("\t--double       double size window");
+	puts("\t--double       double size window (608 x 384)");
+	puts("\t--triple       triple size window (912 x 576)");
+	puts("\t--scale=[2|3]  rescale using scale2x or scale3x filters");
 	puts("\t--fullscreen   start in fullscreen");
 	puts("\t--room n       start from a different room");
 	puts("\t--sprite-test  run sprite test (use with room)");
@@ -990,7 +929,9 @@ static struct option options[] =
 	{"fullscreen", no_argument, &fullscreen_flag, 1},
 	{"record", no_argument, &record_flag, 1},
 	{"replay", no_argument, &replay_flag, 1},
-	{"double", no_argument, &double_flag, 1},
+	{"double", no_argument, 0, '2'},
+	{"triple", no_argument, 0, '3'},
+	{"scale", required_argument, 0, 's'},
 	{"iso", no_argument, 0, 'i'},
 	{"fastest", no_argument, &fastest_flag, 1}
 };
@@ -1004,7 +945,7 @@ int main(int argc, char **argv)
 	options_index = 0;
 	while (1)
 	{
-		int c = getopt_long(argc, argv, "hdr:2", options, &options_index);
+		int c = getopt_long(argc, argv, "hdr:23s:", options, &options_index);
 		if (c == -1)
 		{
 			/* no more options */
@@ -1027,7 +968,22 @@ int main(int argc, char **argv)
 			return 0;
 
 			case '2':
-			double_flag = 1;
+			scale = 2;
+			break;
+
+			case '3':
+			scale = 3;
+			break;
+
+			case 's':
+			scale = atoi(optarg);
+			if (scale != 2 && scale != 3)
+			{
+				panic("invalid scaler (either 2 or 3)");
+				return 1;
+			}
+
+			filtered_flag = 1;
 			break;
 
 			case 'i':

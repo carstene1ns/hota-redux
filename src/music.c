@@ -28,12 +28,14 @@ extern int nosound_flag;
 static SDL_CD *sdl_cd;
 static Mix_Music *current_track;
 
-void stop_music_cd()
+/* stop cd player */
+static void stop_music_cd()
 {
 	SDL_CDStop(sdl_cd);
 }
 
-void stop_music_mp3()
+/* stop mp3 player */
+static void stop_music_mp3()
 {
 	if (current_track != NULL)
 	{
@@ -42,6 +44,7 @@ void stop_music_mp3()
 	}
 }
 
+/* stop music */
 void stop_music()
 {
 	if (nosound_flag)
@@ -59,7 +62,8 @@ void stop_music()
 	}
 }
 
-void play_music_track_cd(int track, int loop)
+/* play a single track from cd */
+static void play_music_track_cd(int track, int loop)
 {
 	LOG(("play_music_track_cd(track=%d, loop=%d, sdlcd=0x%x)\n", track, loop, sdl_cd));
 
@@ -74,7 +78,8 @@ void play_music_track_cd(int track, int loop)
 	}
 }
 
-void play_music_track_mp3(int track, int loop)
+/* play an mp3 in background */
+static void play_music_track_mp3(int track, int loop)
 {
 	char filename[256];
 
@@ -87,6 +92,7 @@ void play_music_track_mp3(int track, int loop)
 	Mix_PlayMusic(current_track, loop);
 }
 
+/* play audio track */
 void play_music_track(int track, int loop)
 {
 	if (nosound_flag)
@@ -106,10 +112,12 @@ void play_music_track(int track, int loop)
 	}
 }
 
+/* callback after a frame has been rendered */
 void music_update()
 {
 }
 
+/* module initializer */
 void music_init()
 {
 	if (nosound_flag)
@@ -123,4 +131,3 @@ void music_init()
 		sdl_cd = SDL_CDOpen(0);
 	}
 }
-

@@ -30,9 +30,21 @@
 
 extern int nosound_flag;
 
-/* cached samples, useless convertion and allocation hurts my eyes! */
-Mix_Chunk *cached_samples[256];
+/* cached samples, useless convertions and allocations hurt my eyes! */
+static Mix_Chunk *cached_samples[256];
 
+/* stop all channels from playing */
+static void stop_all_channels()
+{
+	int p;
+
+	for (p=0; p<4; p++)
+	{
+		Mix_HaltChannel(p);
+	}
+}
+
+/* play a single sample, on a specific channel (out of 4) */
 void play_sample(int index, int volume, int channel)
 {
 	int length, outlen, ptr;
@@ -50,10 +62,7 @@ void play_sample(int index, int volume, int channel)
 	if (index == 0)
 	{
 		/* stop all sounds */
-		Mix_HaltChannel(0);
-		Mix_HaltChannel(1);
-		Mix_HaltChannel(2);
-		Mix_HaltChannel(3);
+		stop_all_channels();
 		return;
 	}
 
@@ -88,13 +97,17 @@ void play_sample(int index, int volume, int channel)
 		signed char s;
 
 		u = get_byte(ptr++);
-		if (u & 0x80)
+		if (u > 0x80)
 		{
-			s = (u == 0x80) ? 0 : -(u & 0x7f);
+			s = -(u & 0x7f);
+		}
+		else if (u < 0x80)
+		{
+			s = u;
 		}
 		else
 		{
-			s = u;
+			s = 0x00;
 		}
 	
 		*current_sample++ = s;
@@ -114,11 +127,13 @@ void play_sample(int index, int volume, int channel)
 	Mix_PlayChannel(channel, chunk, 0);
 }
 
+/* module initializer */
 void sound_init()
 {
 	memset((void *)cached_samples, '\0', sizeof(cached_samples));
 }
 
+/* free all memory allocated for cached sound effects */
 void sound_flush_cache()
 {
 	int i, elem;
@@ -134,6 +149,7 @@ void sound_flush_cache()
 	}
 }
 
+/* callback when game script has been unloaded */
 void sound_done()
 {
 	sound_flush_cache();

@@ -238,3 +238,61 @@ void unmirror_sprite(int sprite)
 		flip_sprite(sprite);
 	}
 }
+
+void remove_sprite(int var)
+{
+	int d1, entry;
+	int to_remove;
+
+	/* remove sprite */
+	if (var == 0)
+	{
+		/* reset all sprites */
+		reset_sprite_list();
+		return;
+	}
+
+	if (sprite_count == 0)
+	{
+		/* no sprites anyway */
+		return;
+	}
+
+	to_remove = get_variable(var);
+
+	if (to_remove == first_sprite)
+	{
+		/* remove first sprite */
+		first_sprite = sprites[to_remove].next;
+		sprites[to_remove].next = last_sprite;
+		last_sprite = to_remove;
+		sprite_count--;
+		return;
+	}
+
+	entry = first_sprite;
+
+	/* look for the sprite to be removed */
+	loc_bf0c:
+	if (sprites[entry].next == to_remove)
+	{
+		goto loc_bf24;
+	}
+
+	d1 = sprites[entry].next;
+	if (d1 == 0)
+	{
+		return;
+	}
+
+	entry = d1;
+	goto loc_bf0c;
+
+	loc_bf24:
+	d1 = last_sprite;
+	last_sprite = to_remove;
+	sprites[entry].next = sprites[to_remove].next;
+	sprites[to_remove].next = d1;
+	sprite_count--;
+}
+

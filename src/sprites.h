@@ -36,5 +36,6 @@ void move_sprite_by(int sprite, int dx, int dy);
 void flip_sprite(int sprite);
 void mirror_sprite(int sprite);
 void unmirror_sprite(int sprite);
+void remove_sprite(int var);
 
 #endif

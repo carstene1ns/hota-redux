@@ -36,7 +36,6 @@ void rest(int fps);
 extern short variables[256];
 extern SDL_Surface *screen;
 extern unsigned char memory[];
-extern int palette_changed;
 extern SDL_Color palette[256];
 
 /* used for 4->8 bit convertion */
@@ -934,7 +933,7 @@ int play_sequence(int offset, int fps)
 	set_scroll(d0/304); ///////////////
 	copy_to_screen();
 	post_render(fps);
-	LOG(("d1d4\n"));
+	/* LOG(("d1d4\n")); */
 	a4 += d0;
 	d1--;
 	if (d1 >= 0)
@@ -1014,7 +1013,7 @@ int play_sequence(int offset, int fps)
 	// clr.b   ($C0401).l
 	copy_to_screen();
 	post_render(fps);
-	LOG(("d268\n"));
+	/* LOG(("d268\n")); */
 	// clr.b   ($C0401).l
 	//move.b  #-1,($C0400).l
 	// FIXME: WHY TWICE??
@@ -1039,7 +1038,7 @@ int play_sequence(int offset, int fps)
 //seg000:0000D2AE                 clr.b   ($C0401).l
 	copy_to_screen();
 	post_render(fps);
-	LOG(("d2ae\n"));
+	/* LOG(("d2ae\n")); */
 //seg000:0000D2B8                 move.b  #-1,($C0400).l
 	goto loc_d160;
 
@@ -1095,7 +1094,6 @@ int play_animation(const char *filename, int fileoffset)
 
 		palette_offset = get_long(0x809a) + (scene << 5);
 		set_palette_rgb12(&memory[palette_offset]);
-		palette_changed = 1;
 
 		scene_offset = get_long(0x80a6 + (scene << 2));
 		stop = play_sequence(scene_offset, fps_);

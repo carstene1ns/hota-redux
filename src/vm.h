@@ -13,4 +13,6 @@ unsigned char get_byte(int offset);
 unsigned short get_word(int offset);
 unsigned long get_long(int offset);
 
+void vm_reset();
+
 #endif

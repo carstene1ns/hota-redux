@@ -16,6 +16,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
+
+#include <memory.h>
 #include "vm.h"
 
 /* FIXME: need more memory just for temp animation buffer */
@@ -74,4 +76,12 @@ int toggle_aux(int toggle)
 	int old = using_aux;
 	using_aux = toggle;
 	return old;
+}
+
+void vm_reset()
+{
+	auxptr = 0;
+	using_aux = 0;
+	memset(variables, '\0', sizeof(variables));
+	memset(auxvars, '\0', sizeof(auxvars));
 }

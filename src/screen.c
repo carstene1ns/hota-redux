@@ -22,9 +22,10 @@
 
 #include "vm.h"
 #include "debug.h"
+#include "render.h"
 #include "screen.h"
 
-/* console ports in mind. */
+/* instead of allocations. makes porting to consoles easier. */
 static char huge_buf[304*192*3];
 
 static char *screens[4];
@@ -51,6 +52,7 @@ void copy_screen(int dest, int src)
 	if (src == 0xc0)
 	{
 		set_variable(249, scroll_reg);
+		/* XXX return ? */
 	}
 
 	masked_src = src;

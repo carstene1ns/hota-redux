@@ -319,63 +319,6 @@ void render_sprite(int list_entry)
 	}
 }
 
-void remove_sprite(int var)
-{
-	int d1, entry;
-	int to_remove;
-
-	/* remove sprite */
-	if (var == 0)
-	{
-		/* reset all sprites */
-		reset_sprite_list();
-		return;
-	}
-
-	if (sprite_count == 0)
-	{
-		/* no sprites anyway */
-		return;
-	}
-
-	to_remove = get_variable(var);
-
-	if (to_remove == first_sprite)
-	{
-		/* remove first sprite */
-		first_sprite = sprites[to_remove].next;
-		sprites[to_remove].next = last_sprite;
-		last_sprite = to_remove;
-		sprite_count--;
-		return;
-	}
-
-	entry = first_sprite;
-
-	/* look for the sprite to be removed */
-	loc_bf0c:
-	if (sprites[entry].next == to_remove)
-	{
-		goto loc_bf24;
-	}
-
-	d1 = sprites[entry].next;
-	if (d1 == 0)
-	{
-		return;
-	}
-
-	entry = d1;
-	goto loc_bf0c;
-
-	loc_bf24:
-	d1 = last_sprite;
-	last_sprite = to_remove;
-	sprites[entry].next = sprites[to_remove].next;
-	sprites[to_remove].next = d1;
-	sprite_count--;
-}
-
 void draw_sprites()
 {
 	LOG(("draw_sprites"));
@@ -404,15 +347,15 @@ void draw_sprites()
 	}
 }
 
-void interesting(int d1, int list_entry)
+void load_sprite(int index, int list_entry)
 {
 	unsigned long a2, a4;
-	unsigned short d0, d2, d3;
+	unsigned short d0, d1, d2, d3;
 
 	/* copy sprite from resources into list */
 
 	/* cbdc get resource */
-	a4 = get_long(0xf904) + (d1 << 2);
+	a4 = get_long(0xf904) + (index << 2);
 	a4 = get_long(a4);
 
 	/* cbec a6-1 => 3 */
@@ -463,7 +406,7 @@ void interesting(int d1, int list_entry)
 	sprites[list_entry].w4 = d2;
 	sprites[list_entry].w5 = d3;
 
-	/* used before calling interesting() */
+	/* used before calling */
 	next_pc();
 }
 
@@ -491,7 +434,7 @@ void op_85()
 	assert(0);
 }
 
-void op_28()
+void collision_against_set()
 {
 	int entry_a1, entry_trg, entry_src;
 	short d2, d3;
@@ -1090,7 +1033,7 @@ void op_24()
 	set_variable(4, x1);
 }
 
-void op_25()
+void add_sprite()
 {
 	int entry_a6, entry_a4;
 	unsigned char p;
@@ -1129,7 +1072,7 @@ void op_25()
 		sprites[entry_a6].u3 = get_byte(script_ptr + pc + 4);
 
 		/* passed: code is okay! */
-		interesting(d1, entry_a6);
+		load_sprite(d1, entry_a6);
 		sprite_count++;
 
 		//LOG(("d2 == %d\n", d2);
@@ -1164,7 +1107,7 @@ void op_25()
 
 				sprites[entry_a6].frame = p;
 				sprites[entry_a6].u3 = get_byte(script_ptr + pc + 4);
-				interesting(d1, entry_a6);
+				load_sprite(d1, entry_a6);
 				sprite_count++;
 				return;
 			}
@@ -1198,7 +1141,7 @@ void op_25()
 
 			sprites[entry_a6].frame = p;
 			sprites[entry_a6].u3 = get_byte(script_ptr + pc + 4);				
-			interesting(d1, entry_a6);
+			load_sprite(d1, entry_a6);
 			sprite_count++;
 			return;
 		}
@@ -1224,7 +1167,7 @@ void op_25()
 
 			sprites[entry_a6].frame = p;
 			sprites[entry_a6].u3 = get_byte(script_ptr + pc + 4);				
-			interesting(d1, entry_a6);
+			load_sprite(d1, entry_a6);
 			sprite_count++;
 			return;
 		}
@@ -1309,7 +1252,7 @@ void op_89()
 	}
 
 	sprites[entry].frame = p;
-	interesting(d1, entry);
+	load_sprite(d1, entry);
 
 	/* WTF! */
 	pc--;
@@ -2311,7 +2254,7 @@ int decode(int current_task, int start_pc)
 	
 			case 0x25:
 			LOG(("add sprite\n"));
-			op_25();
+			add_sprite();
 			break;
 	
 			case 0x26:
@@ -2323,7 +2266,8 @@ int decode(int current_task, int start_pc)
 			break;
 
 			case 0x28:
-			op_28();
+			LOG(("collision against set\n"));
+			collision_against_set();
 			LOG(("\n"));
 			break;
 
@@ -2350,7 +2294,7 @@ int decode(int current_task, int start_pc)
 			x = extw(next_pc());
 			y = extw(next_pc());
 
-			LOG(("shift sprite %d by (%d, %d)\n", imm16, x, y));
+			LOG(("move sprite %d by (%d, %d)\n", imm16, x, y));
 
 			move_sprite_by(imm16, x, y);
 			break;
