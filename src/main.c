@@ -88,6 +88,10 @@ FILE *record_fp = 0;
 
 SDL_Surface *screen;
 
+#ifdef ENABLE_DEBUG
+short old_var[256+64*32];
+#endif
+
 void set_palette_rgb12(unsigned char *rgb12)
 {
 	int i;
@@ -683,13 +687,49 @@ void init_tasks()
 	task_pc[0] = 0;
 }
 
-#ifdef ENABLE_DEBUG
-short old_var[256+64*32];
-#endif
+static void play_intro()
+{
+	int stop = 0;
+
+	if (stop == 0)
+	{
+		play_music_track(31, 0);
+		stop = play_animation("INTRO1.BIN", 0);
+	}
+
+	if (stop == 0)
+	{
+		play_music_track(32, 0);
+		stop = play_animation("INTRO2.BIN", 0);
+	}
+
+	if (stop == 0)
+	{
+		play_music_track(33, 0);
+		stop = play_animation("INTRO3.BIN", 0);
+	}
+
+	if (stop == 0)
+	{
+		play_music_track(34, 0);
+		stop = play_animation("INTRO4.BIN", 0);
+	}
+
+	stop_music();
+}
 
 void run()
 {
+	/* if no room specified, then follow the original flow:
+	 * first play intro, then jump to code entry script.
+	 */
 	init_tasks();
+
+	if (next_script == 0)
+	{
+		play_intro();
+		next_script = 7;
+	}
 
 	quit = 0;
 	while (quit == 0)
@@ -804,16 +844,27 @@ void run()
 
 void animation_test()
 {
-	play_animation("INTRO1.BIN");
-	play_animation("INTRO2.BIN");
-	play_animation("INTRO3.BIN");
-	play_animation("INTRO4.BIN");
-	play_animation("MID1.BIN");
-	play_animation("MID2.BIN");
-	play_animation("END1.BIN");
-	play_animation("END2.BIN");
-	play_animation("END3.BIN");
-	play_animation("END4.BIN");
+	play_music_track(31, 0);
+	play_animation("INTRO1.BIN", 0);
+	play_music_track(32, 0);
+	play_animation("INTRO2.BIN", 0);
+	play_music_track(33, 0);
+	play_animation("INTRO3.BIN", 0);
+	play_music_track(34, 0);
+	play_animation("INTRO4.BIN", 0);
+	play_music_track(35, 0);
+	play_animation("MAKE2MB.BIN", 0x109a);
+	play_music_track(36, 0);
+	play_animation("MID2.BIN", 0);
+	play_music_track(37, 0);
+	play_animation("END1.BIN", 0);
+	play_music_track(38, 0);
+	play_animation("END2.BIN", 0);
+	play_music_track(39, 0);
+	play_animation("END3.BIN", 0);
+	play_music_track(40, 0);
+	play_animation("END4.BIN", 0);
+	stop_music();
 }
 
 void sprite_test()
@@ -945,7 +996,7 @@ int main(int argc, char **argv)
 {
 	int options_index;
 
-	next_script = 1;
+	next_script = 0;
 
 	options_index = 0;
 	while (1)

@@ -67,7 +67,7 @@ int get_iso_toggle()
 	return use_iso;
 }
 
-int get_file_offset(const char *filename, int *offset, int *size)
+static int get_file_offset(const char *filename, int *offset, int *size)
 {
 	int p, elements;
 

@@ -2172,17 +2172,24 @@ int decode(int current_task, int start_pc)
 				}
 				else if (next_script == 7)
 				{
-					play_animation("MID1.BIN");
-					play_animation("MID2.BIN");
+					play_music_track(35, 0);
+					play_animation("MAKE2.BIN", 0x109a);
+					play_music_track(36, 0);
+					play_animation("MID2.BIN", 0);
+					stop_music();
 					next_script = 6;
 					leave = 1;
 				}
 				else if (next_script == 6)
 				{
-					play_animation("END1.BIN");
-					play_animation("END2.BIN");
-					play_animation("END3.BIN");
-					play_animation("END4.BIN");
+					play_music_track(37, 0);
+					play_animation("END1.BIN", 0);
+					play_music_track(38, 0);
+					play_animation("END2.BIN", 0);
+					play_music_track(39, 0);
+					play_animation("END3.BIN", 0);
+					play_music_track(40, 0);
+					play_animation("END4.BIN", 0);
 
 					/* return to password selection */
 					next_script = 7;
@@ -2211,13 +2218,13 @@ int decode(int current_task, int start_pc)
 				/* one shot */
 				imm8 = imm8 - 100 - 1;
 
-				printf("play single audio track %d\n", imm8);
+				LOG(("play single audio track %d\n", imm8));
 				play_music_track(imm8, 0);
 			}
 			else
 			{
 				imm8 = imm8 - 1;
-				printf("play audio track %d\n", imm8);
+				LOG(("play audio track %d\n", imm8));
 	
 				play_music_track(imm8, 1);
 			}
@@ -2902,7 +2909,6 @@ int decode(int current_task, int start_pc)
 			case 0x8c:
 			imm8 = next_pc();
 			LOG(("scroll reg = %d\n", extw(imm8)));
-			printf("scroll reg %d\n", extw(imm8));
 			set_scroll(extw(imm8));
 			break;
 
@@ -2913,7 +2919,7 @@ int decode(int current_task, int start_pc)
 			*/
 
 			default:
-			printf("opcode 0x%x unknown\n", opcode);
+			LOG(("opcode 0x%x unknown\n", opcode));
 			panic("unknown!");
 			break;
 		}

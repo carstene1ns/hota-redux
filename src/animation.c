@@ -42,13 +42,21 @@ static unsigned char dummy[304*192/2];
 static unsigned char screen0[192*304];
 static unsigned char screen2[192*304];
 
+static void delay()
+{
+	int fps;
+
+	fps = 10;
+	SDL_Delay(1000 / fps);
+}
+
 static void copy_to_screen()
 {
 	set_scroll(0); /////////
 	render(screen0);
 	SDL_UpdateRect(screen, 0, 0, 0, 0);
 	check_events();
-	rest();
+	delay();
 }
 
 static void draw_pixel(char *out, int offset, int color)
@@ -759,7 +767,7 @@ void decompress_backdrop(unsigned char *out, int a2, int a3)
 	}
 }
 
-void play_sequence(int offset, int slow_down)
+int play_sequence(int offset, int slow_down)
 {
 	int d0, d1, d3, d4, d6, d7;
 	int a0, a1, a2, a3, a4, a5;
@@ -849,11 +857,6 @@ void play_sequence(int offset, int slow_down)
 	decompress_backdrop(screen2, a2, a3);	
 
 	loc_d15e:
-	if (quit != 0)
-	{
-		return;
-	}
-
 	d0 = 0;
 
 	loc_d160:
@@ -862,7 +865,7 @@ void play_sequence(int offset, int slow_down)
 	a1 += 2;
 	if (d0 == 0)
 	{
-		return;
+		return 0;
 	}
 
 	a5 = a5 + d0;
@@ -941,9 +944,15 @@ void play_sequence(int offset, int slow_down)
 	}
 
 	variables[255] = 6;
-	return;
+	return 0;
 
 	loc_d1f4:
+	if (quit != 0)
+	{
+		/* hack, to stop animations */
+		return 1;
+	}
+
 	a1 += 2;
 	a2 = a1;
 	d0 = get_word(a1);
@@ -1040,7 +1049,7 @@ void play_sequence(int offset, int slow_down)
 //seg000:0000D2B8                 move.b  #-1,($C0400).l
 	goto loc_d160;
 
-	return;
+	return 0;
 }
 
 void play_death_animation(int index)
@@ -1052,7 +1061,7 @@ void play_death_animation(int index)
 	play_sequence(get_long(offset), 0);
 }
 
-int play_animation(const char *filename)
+int play_animation(const char *filename, int fileoffset)
 {
 	int pattern;
 	int pattern_offset;
@@ -1061,10 +1070,13 @@ int play_animation(const char *filename)
 	int scene_offset;
 	int palette_offset;
 	int slow_down;
+	int read_offset;
+	int stop;
 
 	LOG(("playing animation %s\n", filename));
 
-	if (read_file(filename, memory + 0x809a) < 0)
+	read_offset = 0x809a - fileoffset;
+	if (read_file(filename, memory + read_offset) < 0)
 	{
 		LOG(("play_animation: unable to read %s\n", filename));
 		return -1;
@@ -1074,8 +1086,8 @@ int play_animation(const char *filename)
 	pattern_offset = get_long(0x809e);
 	total_patterns = get_long(0x80a2);
 
-	quit = 0;
-	while (quit == 0)
+	stop = 0;
+	while (stop == 0)
 	{
 		slow_down = 0;
 
@@ -1092,7 +1104,7 @@ int play_animation(const char *filename)
 		palette_changed = 1;
 
 		scene_offset = get_long(0x80a6 + (scene << 2));
-		play_sequence(scene_offset, slow_down);
+		stop = play_sequence(scene_offset, slow_down);
 
 		pattern++;
 		if (pattern == total_patterns)
@@ -1103,6 +1115,7 @@ int play_animation(const char *filename)
 
 	}
 
+	quit = 0;
 	LOG(("leaving animation player\n"));
-	return 0;
+	return stop;
 }
