@@ -9,7 +9,7 @@ OBJS=\
 	render.o main.o music.o debug.o lzss.o cd_iso.o sound.o \
 	screen.o
 
-LIBS=-Llib -lSDLmain -lsmpeg -lSDL_mixer $(SDL_LIBS)
+LIBS=$(SDL_LIBS) -lSDLmain -lsmpeg -lSDL_mixer
 
 alien: $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS)

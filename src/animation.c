@@ -44,9 +44,10 @@ static unsigned char dummy[304*192/2];
 static unsigned char screen0[192*304];
 static unsigned char screen2[192*304];
 
-static void delay()
+static void post_render(int fps)
 {
-	rest(10);
+	check_events();
+	rest(fps);
 }
 
 static void copy_to_screen()
@@ -54,8 +55,6 @@ static void copy_to_screen()
 	set_scroll(0); /////////
 	render(screen0);
 	SDL_UpdateRect(screen, 0, 0, 0, 0);
-	check_events();
-	delay();
 }
 
 static void draw_pixel(char *out, int offset, int color)
@@ -766,7 +765,7 @@ void decompress_backdrop(unsigned char *out, int a2, int a3)
 	}
 }
 
-int play_sequence(int offset, int slow_down)
+int play_sequence(int offset, int fps)
 {
 	int d0, d1, d3, d4, d6, d7;
 	int a0, a1, a2, a3, a4, a5;
@@ -934,6 +933,7 @@ int play_sequence(int offset, int slow_down)
 	/* clr.b   ($C0401).l */
 	set_scroll(d0/304); ///////////////
 	copy_to_screen();
+	post_render(fps);
 	LOG(("d1d4\n"));
 	a4 += d0;
 	d1--;
@@ -1013,16 +1013,19 @@ int play_sequence(int offset, int slow_down)
 	}
 	// clr.b   ($C0401).l
 	copy_to_screen();
+	post_render(fps);
 	LOG(("d268\n"));
 	// clr.b   ($C0401).l
 	//move.b  #-1,($C0400).l
 	// FIXME: WHY TWICE??
 	copy_to_screen();
+	post_render(fps);
 	//move.b  #-1,($C0400).l
 	d0 = 7;
 
 	loc_d29c:
 	copy_to_screen();
+	post_render(fps);
 	d0--;
 	if (d0 >= 0)
 	{
@@ -1035,15 +1038,7 @@ int play_sequence(int offset, int slow_down)
 	loc_d2ae:
 //seg000:0000D2AE                 clr.b   ($C0401).l
 	copy_to_screen();
-	if (slow_down)
-	{
-		int p;
-
-		for (p=0; p<16; p++)
-		{
-			rest(15);
-		}
-	}
+	post_render(fps);
 	LOG(("d2ae\n"));
 //seg000:0000D2B8                 move.b  #-1,($C0400).l
 	goto loc_d160;
@@ -1057,7 +1052,7 @@ void play_death_animation(int index)
 
 	/* set palette 2 ? */
 	offset = 0xf910 + (index << 2);
-	play_sequence(get_long(offset), 0);
+	play_sequence(get_long(offset), 15);
 }
 
 int play_animation(const char *filename, int fileoffset)
@@ -1068,7 +1063,7 @@ int play_animation(const char *filename, int fileoffset)
 	int scene;
 	int scene_offset;
 	int palette_offset;
-	int slow_down;
+	int fps_;
 	int read_offset;
 	int stop;
 
@@ -1088,14 +1083,14 @@ int play_animation(const char *filename, int fileoffset)
 	stop = 0;
 	while (stop == 0)
 	{
-		slow_down = 0;
+		fps_ = 10;
 
 		scene = get_byte(pattern_offset + pattern);
 		if (scene == 0x17)
 		{
 			/* special case for credits */
 			scene = 3;
-			slow_down = 1;
+			fps_ = 1;
 		}
 
 		palette_offset = get_long(0x809a) + (scene << 5);
@@ -1103,7 +1098,7 @@ int play_animation(const char *filename, int fileoffset)
 		palette_changed = 1;
 
 		scene_offset = get_long(0x80a6 + (scene << 2));
-		stop = play_sequence(scene_offset, slow_down);
+		stop = play_sequence(scene_offset, fps_);
 
 		pattern++;
 		if (pattern == total_patterns)
