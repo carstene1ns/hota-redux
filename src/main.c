@@ -42,7 +42,7 @@
 #include "getopt.h"
 #endif
 
-static char *VERSION = "1.2.0";
+static char *VERSION = "1.2.2";
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";

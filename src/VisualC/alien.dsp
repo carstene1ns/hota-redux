@@ -113,6 +113,10 @@ SOURCE=..\decode.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\game2bin.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\getopt.c
 # End Source File
 # Begin Source File
@@ -138,6 +142,14 @@ SOURCE=..\render.c
 # Begin Source File
 
 SOURCE=..\rooms.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\scale2x.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\scale3x.c
 # End Source File
 # Begin Source File
 
@@ -181,6 +193,10 @@ SOURCE=..\decode.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\game2bin.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\getopt.h
 # End Source File
 # Begin Source File
@@ -198,6 +214,14 @@ SOURCE=..\render.h
 # Begin Source File
 
 SOURCE=..\rooms.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\scale2x.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\scale3x.h
 # End Source File
 # Begin Source File
 
