@@ -80,15 +80,22 @@ void play_sample(int index, int volume, int channel)
 	ptr = get_long(sample_ptr + index * 4);
 	length = get_long(ptr);
 
-	ptr = ptr + 4;
+	/* length plus some unknown flags */
+	ptr = ptr + 8;
 
-	LOG(("sample data starts at %p\n", ptr));
+	LOG(("sample data starts at 0x%x\n", ptr));
 
-	/* convert from 11025 mono 8bit, to 44100 stereo 16bit */
+	/* convert from 8000 mono 8bit, to 44100 stereo 16bit */
 	SDL_BuildAudioCVT(&cvt, AUDIO_S8, 1, 8000, AUDIO_S16, 2, 44100);
+	outlen = length * cvt.len_mult;
+
 	cvt.len = length;
-	outlen = cvt.len * cvt.len_mult;
 	cvt.buf = (char *)malloc(outlen);
+	if (cvt.buf == NULL)
+	{
+		fprintf(stderr, "failed to allocate %d bytes for sample\n", outlen);
+		return;
+	}
 
 	current_sample = (char *)cvt.buf;
 	for (p=0; p<length; p++)
@@ -99,7 +106,7 @@ void play_sample(int index, int volume, int channel)
 		u = get_byte(ptr++);
 		if (u > 0x80)
 		{
-			s = -(u & 0x7f);
+			s = 0 - (u & 0x7f);
 		}
 		else if (u < 0x80)
 		{
@@ -121,7 +128,7 @@ void play_sample(int index, int volume, int channel)
 	chunk->allocated = 1;
 	chunk->abuf = cvt.buf;
 	chunk->alen = outlen;
-	chunk->volume = volume;
+	chunk->volume = volume >> 1;
 
 	cached_samples[index] = chunk;
 	Mix_PlayChannel(channel, chunk, 0);
