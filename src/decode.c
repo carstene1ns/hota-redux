@@ -2173,7 +2173,7 @@ int decode(int current_task, int start_pc)
 				else if (next_script == 7)
 				{
 					play_music_track(35, 0);
-					play_animation("MAKE2.BIN", 0x109a);
+					play_animation("MAKE2MB.BIN", 0x109a);
 					play_music_track(36, 0);
 					play_animation("MID2.BIN", 0);
 					stop_music();
