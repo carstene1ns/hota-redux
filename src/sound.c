@@ -129,7 +129,6 @@ void sound_flush_cache()
 		if (cached_samples[i] != NULL)
 		{
 			Mix_FreeChunk(cached_samples[i]);
-			free(cached_samples[i]);
 			cached_samples[i] = NULL;
 		}
 	}

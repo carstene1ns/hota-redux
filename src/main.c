@@ -41,7 +41,7 @@
 #include "getopt.h"
 #endif
 
-static char *VERSION = "1.1.0";
+static char *VERSION = "1.2.0";
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
@@ -74,6 +74,7 @@ int test_flag = 0;
 int record_flag = 0;
 int replay_flag = 0;
 int fullscreen_flag = 0;
+int fastest_flag = 0;
 char game2bin[409600];
 
 short task_pc[64];
@@ -177,10 +178,8 @@ static void atexit_callback(void)
 
 static int initialize()
 {
-	if (read_file("GAME2.BIN", game2bin) < 0)
-	{
-		panic("can't read GAME2.BIN file");
-	}
+	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_CDROM|SDL_INIT_AUDIO);
+	atexit(atexit_callback);
 
 	if (nosound_flag == 0)
 	{
@@ -193,8 +192,10 @@ static int initialize()
 		sound_init();
 	}
 
-	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_CDROM|SDL_INIT_AUDIO);
-	atexit(atexit_callback);
+	if (read_file("GAME2.BIN", game2bin) < 0)
+	{
+		panic("can't read GAME2.BIN file");
+	}
 
 	screen = SDL_SetVideoMode(304*(1+double_flag), 192*(1+double_flag), 8, SDL_SWSURFACE);
 	if (screen == NULL) 
@@ -656,18 +657,18 @@ void check_events()
 	}
 }
 
-void rest()
+void rest(int fps)
 {
-	int fps;
-
-	fps = 15;
-	if (speed_throttle == 1)
+	if (fastest_flag == 0)
 	{
-		/* 5 times faster */
-		fps = fps*5;
-	}
+		if (speed_throttle == 1)
+		{
+			/* 5 times faster */
+			fps = fps*5;
+		}
 
-	SDL_Delay(1000 / fps);
+		SDL_Delay(1000 / fps);
+	}
 }
 
 void init_tasks()
@@ -807,7 +808,7 @@ void run()
 		SDL_UpdateRect(screen, 0, 0, 0, 0);
                 music_update();
 
-		rest();
+		rest(15);
 
 		#if 0
 		/* uncomment this block to enable printouts of modified
@@ -905,7 +906,7 @@ void sprite_test()
 		}
 
 		check_events();
-		rest();
+		rest(15);
 
 		update_keys();
 
@@ -972,6 +973,7 @@ static void help()
 	puts("\t--room n       start from a different room");
 	puts("\t--sprite-test  run sprite test (use with room)");
 	puts("\t--intro-test   play all animations");
+	puts("\t--fastest      speed throttle");
 	puts("\t--record       record keys");
 	puts("\t--replay       replay keys");
 	puts("\t--help         this help");
@@ -989,7 +991,8 @@ static struct option options[] =
 	{"record", no_argument, &record_flag, 1},
 	{"replay", no_argument, &replay_flag, 1},
 	{"double", no_argument, &double_flag, 1},
-	{"iso", no_argument, 0, 'i'}
+	{"iso", no_argument, 0, 'i'},
+	{"fastest", no_argument, &fastest_flag, 1}
 };
 
 int main(int argc, char **argv)

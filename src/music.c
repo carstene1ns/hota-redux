@@ -61,9 +61,16 @@ void stop_music()
 
 void play_music_track_cd(int track, int loop)
 {
+	LOG(("play_music_track_cd(track=%d, loop=%d, sdlcd=0x%x)\n", track, loop, sdl_cd));
+
 	if (CD_INDRIVE(SDL_CDStatus(sdl_cd)))
 	{
-		printf("SDL_CDPlay returned %d\n", SDL_CDPlayTracks(sdl_cd, track, 0, 1, 0));
+		int err = SDL_CDPlayTracks(sdl_cd, track, 0, 1, 0);
+		LOG(("SDL_CDPlay returned %d\n", err));
+	}
+	else
+	{
+		LOG(("can't play cd audio, CD_INDRIVE failed\n"));
 	}
 }
 
@@ -73,7 +80,7 @@ void play_music_track_mp3(int track, int loop)
 
 	stop_music_mp3();
 
-	sprintf(filename, "heartalien/Heart Of The Alien (U) %02d.mp3", track + 1);
+	sprintf(filename, "Heart Of The Alien (U) %02d.mp3", track + 1);
 	printf("playing mp3 %s\n", filename);
 
 	current_track = Mix_LoadMUS(filename);
@@ -105,6 +112,11 @@ void music_update()
 
 void music_init()
 {
+	if (nosound_flag)
+	{
+		return;
+	}
+
 	if (get_iso_toggle() == 0)
 	{
 		/* initialize SDL CDROM, for playing audio tracks */

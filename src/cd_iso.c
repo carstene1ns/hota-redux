@@ -22,7 +22,7 @@
 #include "debug.h"
 #include "cd_iso.h"
 
-static char *ISO_FILENAME = "heartalien/Heart Of The Alien (U).iso";
+static char *ISO_FILENAME = "Heart Of The Alien (U).iso";
 static int use_iso = 0;
 
 typedef struct file_offset_t 
@@ -43,7 +43,7 @@ static file_offset_t file_offsets[] =
 	{"INTRO2.BIN", 0xe0800, 0x69800},
 	{"INTRO3.BIN", 0x14a000, 0x69800},
 	{"INTRO4.BIN", 0x1b3800, 0x69800},
-	{"MID1.BIN", 0x72209a, 0x69800},     /* part of make1s.bin file */
+	{"MAKE2MB.BIN", 0x721000, 0x6a800},     /* contains animation! */
 	{"MID2.BIN", 0x78b800, 0x69800},
 	{"ROOMS1.BIN", 0x8ca800, 0x5a800},
 	{"ROOMS2.BIN", 0x281000, 0x5a800},
@@ -90,7 +90,7 @@ static int read_file_internal(const char *filename, int size, int offset, void *
 {
 	FILE *fp;
 
-	fp = fopen(ISO_FILENAME, "rb");
+	fp = fopen(filename, "rb");
 	if (fp == NULL)
 	{
 		LOG(("read_file: error opening file %s\n", filename));
@@ -112,7 +112,7 @@ static int read_file_internal(const char *filename, int size, int offset, void *
 int read_file(const char *filename, void *out)
 {
 	int size, offset;
-	const char *archive;
+	char archive[256];
 	
 	if (get_file_offset(filename, &offset, &size) < 0)
 	{
@@ -123,11 +123,22 @@ int read_file(const char *filename, void *out)
 
 	if (use_iso)
 	{
-		archive = ISO_FILENAME;
+		strcpy(archive, ISO_FILENAME);
 	}
 	else
 	{
-		archive = filename;
+		const char *cdname = SDL_CDName(0);
+
+		if (cdname != NULL)
+		{
+			strcpy(archive, cdname);
+			strcat(archive, filename);
+		}
+		else
+		{
+			strcpy(archive, filename);
+		}
+
 		offset = 0;
 	}
 

@@ -29,7 +29,9 @@
 #include "render.h"
 #include "common.h"
 
+///////
 extern int quit;
+void rest(int fps);
 
 extern short variables[256];
 extern SDL_Surface *screen;
@@ -44,10 +46,7 @@ static unsigned char screen2[192*304];
 
 static void delay()
 {
-	int fps;
-
-	fps = 10;
-	SDL_Delay(1000 / fps);
+	rest(10);
 }
 
 static void copy_to_screen()
@@ -1042,7 +1041,7 @@ int play_sequence(int offset, int slow_down)
 
 		for (p=0; p<16; p++)
 		{
-			rest();
+			rest(15);
 		}
 	}
 	LOG(("d2ae\n"));
