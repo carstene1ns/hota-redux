@@ -35,8 +35,12 @@ const char *sprite_data_byte_str[16] =
 int first_sprite;
 int sprite_count;
 int last_sprite;
+
 sprite_t sprites[64];
 
+/** Prints out sprite debug information
+    @param p   sprite entry
+*/
 void print_sprite(int p)
 {
 	LOG(("sprite %d\n", p));
@@ -79,6 +83,11 @@ short get_sprite_data_word(int entry, int i)
 	}
 }
 
+/** Returns sprite data by offset
+    @param entry   sprite index
+    @param i       structure offset
+    @returns data value
+*/
 void set_sprite_data_word(int entry, int i, short value)
 {
 	assert(i >= 0 && i <= 15);
@@ -109,6 +118,11 @@ void set_sprite_data_word(int entry, int i, short value)
 	}
 }
 
+/** Returns sprite data by offset
+    @param entry   sprite index
+    @param i       structure offset
+    @returns data value
+*/
 unsigned char get_sprite_data_byte(int entry, int i)
 {
 	assert(i >= 0 && i <= 15);
@@ -223,14 +237,20 @@ void flip_sprite(int sprite)
 	}
 }
 
+/** Turns on the mirror flag on this sprite
+    @param sprite index
+*/
 void mirror_sprite(int sprite)
- {
+{
 	if ((sprites[sprite].frame & 0x80) == 0)
 	{
 		flip_sprite(sprite);
 	}
 }
 
+/** Turns off the mirror flag on this sprite
+    @param sprite index
+*/
 void unmirror_sprite(int sprite)
 {
 	if ((sprites[sprite].frame & 0x80))
@@ -239,9 +259,12 @@ void unmirror_sprite(int sprite)
 	}
 }
 
+/** Removes one or all sprites from sprite list
+    @param var variable that specifies which sprite to remove (0 for all)
+*/
 void remove_sprite(int var)
 {
-	int d1, entry;
+	int entry;
 	int to_remove;
 
 	/* remove sprite */
@@ -273,26 +296,236 @@ void remove_sprite(int var)
 	entry = first_sprite;
 
 	/* look for the sprite to be removed */
-	loc_bf0c:
-	if (sprites[entry].next == to_remove)
+	while (sprites[entry].next != to_remove)
 	{
-		goto loc_bf24;
+		entry = sprites[entry].next;
+		if (entry == 0)
+		{
+			return;
+		}
 	}
 
-	d1 = sprites[entry].next;
-	if (d1 == 0)
-	{
-		return;
-	}
-
-	entry = d1;
-	goto loc_bf0c;
-
-	loc_bf24:
-	d1 = last_sprite;
-	last_sprite = to_remove;
 	sprites[entry].next = sprites[to_remove].next;
-	sprites[to_remove].next = d1;
+	sprites[to_remove].next = last_sprite;
 	sprite_count--;
 }
 
+/** Quickloads sprites state from file descriptor
+    @param fp 
+    @returns zero on success
+*/
+int quickload_sprites(FILE *fp)
+{
+	int i;
+
+	for (i=0; i<MAX_SPRITES; i++)
+	{
+		sprite_t *spr = &sprites[i];
+
+		spr->index = fgetc(fp);
+		spr->u1 = fgetc(fp);
+		spr->next = fgetc(fp);
+		spr->frame = fgetc(fp);
+		spr->x = fgetw(fp);
+		spr->y = fgetw(fp);
+		spr->u2 = fgetc(fp);
+		spr->u3 = fgetc(fp);
+		spr->w4 = fgetw(fp);
+		spr->w5 = fgetw(fp);
+		spr->u6 = fgetc(fp);
+		spr->u7 = fgetc(fp);
+	}
+
+	first_sprite = fgetc(fp);
+ 	sprite_count = fgetc(fp);
+	last_sprite = fgetc(fp);
+	return 0;
+}
+
+/** Quicksaves sprite data onto a file descriptor
+    @param fp  file descriptor to write data to
+    @returns zero on success
+*/
+int quicksave_sprites(FILE *fp)
+{
+	int i;
+
+	/* write all sprites */
+	for (i=0; i<MAX_SPRITES; i++)
+	{
+		sprite_t *spr = &sprites[i];
+
+		fputc(spr->index, fp);
+		fputc(spr->u1, fp);
+		fputc(spr->next, fp);
+		fputc(spr->frame, fp);
+		fputw(spr->x, fp);
+		fputw(spr->y, fp);
+		fputc(spr->u2, fp);
+		fputc(spr->u3, fp);
+		fputw(spr->w4, fp);
+		fputw(spr->w5, fp);
+		fputc(spr->u6, fp);
+		fputc(spr->u7, fp);
+	}
+
+	fputc(first_sprite, fp);
+ 	fputc(sprite_count, fp);
+	fputc(last_sprite, fp);
+	return 0;
+}
+
+/** Renders a single sprite
+    @param list_entry
+*/
+void render_sprite(int list_entry)
+{
+	unsigned long d0, d1, d2, d3, d4, d6;
+	int d7;
+	int offset;
+	int color;
+	int a2, a3;
+	int count;
+	int sx, sy;
+	int x, y, dx, dy;
+
+	/* d89e */
+	d2 = sprites[list_entry].index;
+
+	a3 = get_long(0xf904) + (d2 << 2);
+	a3 = get_long(a3);
+
+	d0 = d1 = d2 = 0;
+	x = extl(sprites[list_entry].x);
+	y = extl(sprites[list_entry].y);
+
+	d3 = y*304 + x;
+
+	d2 = sprites[list_entry].frame & 0x7f;
+	d1 = get_word(a3 + d2*2 + 6);
+	a2 = a3 + d1 + 4;
+	d6 = get_word(a2);
+	a2 += 2;
+	
+	for (color = 0; color < 16; color++)
+	{
+		if ((d6 & (1 << color)) == 0)
+		{
+			/* no such color in sprite */
+			continue;
+		}
+
+		if (sprites[list_entry].frame & 0x80)
+		{
+			goto sprite_mirrored;
+		}
+	
+		/* d2 is color */
+		loc_d91e:
+		offset = get_word(a2); /* relative offset */
+		a2 = a2 + 2;
+		dx = offset % 304;
+		dy = offset / 304;
+		sx = x + dx;
+		sy = y + dy;
+		count = get_byte(a2++) + 1;
+		fill_line(count, sx, sy, color);
+	
+		loc_d93c:
+		d7 = get_byte(a2++);
+		if (d7 == 0x99)
+		{
+			/* repeat using the same color! */
+			goto loc_d91e;
+		}
+	
+		if (d7 == 0xaa)
+		{
+			continue;
+		}
+	 
+		/* d94a */
+		/* d7: two signed nibbles */
+		d4 = d7;
+	
+		d7 = extn((unsigned char)(d7 & 0x0f)); /* delta-count */
+		dx = extn((unsigned char)(d4 >> 4));
+		count = count + d7 - dx;
+	
+		sy = sy + 1;
+		sx = sx + dx;
+		fill_line(count, sx, sy, color);
+		goto loc_d93c;
+
+		sprite_mirrored:
+		/* d9a6 */
+		/* d2 is color */
+		loc_d9b4:
+		offset = get_word(a2);
+		a2 += 2;
+	
+		dx = offset % 304;
+		dy = offset / 304;
+		sx = x - dx;
+		sy = y + dy;
+	
+		count = get_byte(a2++) + 1;
+		fill_line_reversed(count, sx, sy, color);
+	
+		loc_d9e2:
+		d7 = get_byte(a2++);
+		if (d7 == 0x99)
+		{
+			goto loc_d9b4;
+		}
+	
+		if (d7 == 0xaa)
+		{
+			continue;
+		}
+	
+		d4 = d7;
+		d7 = extn((unsigned char)(d7 & 0x0f));
+		dx = extn((unsigned char)(d4 >> 4));
+		count = count + d7 - dx;
+	
+		sy = sy + 1;
+		sx = sx - dx;
+	
+		fill_line_reversed(count, sx, sy, color);
+		goto loc_d9e2;
+	}
+}
+
+/** Draws all visible sprites
+
+    Sprites are arranged in a linked list of z-order, where each
+    has a visibility flag, and a mirror flag
+*/
+void draw_sprites()
+{
+	LOG(("draw_sprites"));
+
+	if (sprite_count != 0)
+	{
+		unsigned char d1;
+
+		d1 = first_sprite;
+		while (1)
+		{
+			if ((sprites[d1].u1 & FLAG_HIDDEN) == 0)
+			{
+				/* visible */
+				render_sprite(d1);
+			}
+
+			d1 = sprites[d1].next;
+			if (d1 == 0)
+			{
+				break;
+			}
+
+			LOG(("linkedup to %d\n", d1));
+		}
+	}
+}
