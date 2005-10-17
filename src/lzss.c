@@ -1,6 +1,6 @@
 /*
- * Heart of The Alien: LZSS decompressor
- * Copyright (c) 2004 Gil Megidish
+ * Heart of The Alien: lzss decompressor
+ * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,146 +22,128 @@
 
 #include "vm.h"
 
-int unlzss(unsigned char *out, int a2, int a3)
+/** Decompresses lzss packed byte buffer
+    @param out      output buffer (must be of size 304*192/2 bytes)
+
+    Executable offset: 0xcf5c
+    There are 16 common distances
+
+    @returns 0 on success
+*/
+int unlzss(unsigned char *out, int ptr1, int ptr2)
 {
-	int a1;
-	int d0, d1, d2, d3, d4, d6;
+	int packed;
+	int bitmask, bits_left, d2, d3, d4, d6;
 	int common_distances;
 	unsigned char *copy_from;
 
 	/* 
-	d1 bits left (and bit checked)
-	d0 32bits 
+	bits_left bits left (and bit checked)
+	bitmask 32bits 
 	d3 negative offset against output
 	*/
 
-	// cf5c
-	a1 = a3 + 20;
-	d4 = get_word(a3);
-	a3 = a3 + 3;
-	common_distances = a3;
-	*out++ = get_byte(a1++);
+	d4 = get_word(ptr2);
+	packed = ptr2 + 20;
+	common_distances = ptr2 + 3;
+	*out++ = get_byte(packed++);
 
-	// cf6e
 	loc_cf6e:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
+	bitmask = get_long(ptr1);
+	ptr1 = ptr1 + 4;
+	bits_left = 31;
+
 	goto loc_cf7a;
 
-	loc_cf74:
-	/* escaped literal */
-	*out++ = get_byte(a1++);
-
 	loc_cf76:
-	d1--;
-	if (d1 < 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
 		goto loc_cf6e;
 	}
 
 	loc_cf7a:
-	if (d0 & (1 << d1))
+	if (bitmask & (1 << bits_left))
 	{
-		goto loc_cf74;
+		/* escaped literal */
+		*out++ = get_byte(packed++);
+		goto loc_cf76;
 	}
 
-	d1--; 
-	if (d1 < 0)
+	bits_left--; 
+	if (bits_left < 0)
 	{
-		goto loc_cf98;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
+		goto loc_cf82;
 	}
 
 	loc_cf82:
-	if (d0 & (1 << d1))
+	if (bitmask & (1 << bits_left))
 	{
 		goto loc_cfa4;
 	}
 
-	d1--;
-	if (d1 < 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_cf9e;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
 	}
 
-	loc_cf8a:
-	d3 = get_byte(a1);
-	a1++;
-	if ((d0 & (1 << d1)) == 0)
+	d3 = get_byte(packed++);
+	if ((bitmask & (1 << bits_left)))
 	{
-		goto loc_cfe6;
+		d3 = d3 | 0x100;
 	}
 
-	d3 = d3 | 0x100;
 	goto loc_cfe6;
 
-	loc_cf98:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
-	goto loc_cf82;
-
-	loc_cf9e:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
-	goto loc_cf8a;
-
 	loc_cfa4:
-	d1--;
-	if (d1 < 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_cfcc;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
 	}
 
-	loc_cfa8:
 	d2 = 0;
 	d6 = 1;
 
 	loc_cfac:
-	if (d0 & (1 << d1))
+	if (bitmask & (1 << bits_left))
 	{
 		goto loc_cfd2;
 	}
 
-	d1--;
-	if (d1 < 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_cfc6;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
+		goto loc_cfb4;
 	}
 
 	loc_cfb4:
-	if ((d0 & (1 << d1)) == 0)
+	if (bitmask & (1 << bits_left))
 	{
-		goto loc_cfba;
+		d2 = d2 + d6;
 	}
-	
-	d2 = d2 + d6;
 
-	loc_cfba:
 	d6 = d6 << 1;
-	d1--;
-	if (d1 >= 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_cfac;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
 	}
-	
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
+
 	goto loc_cfac;
-
-	loc_cfc6:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
-	goto loc_cfb4;
-
-	loc_cfcc:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
-	goto loc_cfa8;
 
 	loc_cfd2:
 	d2 = d2 + d6;
@@ -171,7 +153,6 @@ int unlzss(unsigned char *out, int a2, int a3)
 		goto loc_d026;
 	}
 
-	//printf("d2 = %d, a3 = 0x%x\n", d2, a3);
 	d3 = get_byte(common_distances + d2);
 	if (d4 & (1 << d2))
 	{
@@ -179,69 +160,56 @@ int unlzss(unsigned char *out, int a2, int a3)
 	}
 
 	loc_cfe6:
-	d1--;
-	if (d1 < 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_d00e;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
 	}
 
-	loc_cfea:
 	d2 = 0;
 	d6 = 1;
 
 	loc_cfee:
-	if (d0 & (1 << d1))
+	if (bitmask & (1 << bits_left))
 	{
-		goto loc_d014;
+		/* direct copy */
+		int count = d2 + d6 + 2;
+		copy_from = out - d3;
+
+		while (count--)
+		{
+			*out++ = *copy_from++;
+		}
+
+		goto loc_cf76;
 	}
 
-	d1 = d1 - 1;
-	if (d1 < 0)
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_d008;	
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
 	}
 
-	loc_cff6:
-	if ((d0 & (1 << d1)))
+	if ((bitmask & (1 << bits_left)))
 	{
 		d2 = d2 + d6;
 	}
 
 	d6 = d6 << 1;
-	d1--;
-	if (d1 >= 0)
+
+	bits_left--;
+	if (bits_left < 0)
 	{
-		goto loc_cfee;
+		bitmask = get_long(ptr1);
+		ptr1 = ptr1 + 4;
+		bits_left = 31;
 	}
 
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
 	goto loc_cfee;
-
-	loc_d008:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
-	goto loc_cff6;
-
-	loc_d00e:
-	d0 = get_long(a2);
-	a2 = a2 + 4;
-	d1 = 0x1f;
-	goto loc_cfea;
-
-	loc_d014:
-	d2 = d2 + d6 + 1;
-	copy_from = out - d3;
-
-	while (d2 >= 0)
-	{
-		*out++ = *copy_from++;
-		d2--;
-	}
-
-	goto loc_cf76;
 
 	loc_d026:
 	return 0;
