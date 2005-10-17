@@ -1,33 +1,36 @@
-#define HAVE_STRING_H 1
-
 /* Getopt for GNU.
    NOTE: getopt is now part of the C library, so if you don't know what
    "Keep this file name-space clean" means, talk to drepper@gnu.org
    before changing it!
 
-   Copyright (C) 1987, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 2000
+   Copyright (C) 1987, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98
    	Free Software Foundation, Inc.
 
-   The GNU C Library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public License as
-   published by the Free Software Foundation; either version 2 of the
-   License, or (at your option) any later version.
+   NOTE: This source is derived from an old version taken from the GNU C
+   Library (glibc).
 
-   The GNU C Library is distributed in the hope that it will be useful,
+   This program is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2, or (at your option) any
+   later version.
+
+   This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-   You should have received a copy of the GNU Library General Public
-   License along with the GNU C Library; see the file COPYING.LIB.  If not,
-   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.  */
-
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+   USA.  */
+
+#include <string.h>
+
 /* This tells Alpha OSF/1 not to define a getopt prototype in <stdio.h>.
    Ditto for AIX 3.2 and <stdlib.h>.  */
 #ifndef _NO_PROTO
 # define _NO_PROTO
-#endif
+#endif 
 
 #ifdef HAVE_CONFIG_H
 # include <config.h>
@@ -79,12 +82,11 @@
 #endif
 
 #ifndef _
-/* This is for other GNU distributions with internationalized messages.  */
-# if defined HAVE_LIBINTL_H || defined _LIBC
+/* This is for other GNU distributions with internationalized messages.
+   When compiling libc, the _ macro is predefined.  */
+# if (HAVE_LIBINTL_H && ENABLE_NLS) || defined _LIBC
 #  include <libintl.h>
-#  ifndef _
-#   define _(msgid)	gettext (msgid)
-#  endif
+#  define _(msgid)	gettext (msgid)
 # else
 #  define _(msgid)	(msgid)
 # endif
@@ -112,7 +114,7 @@
    Also, when `ordering' is RETURN_IN_ORDER,
    each non-option ARGV-element is returned here.  */
 
-char *optarg;
+char *optarg = NULL;
 
 /* Index in ARGV of the next element to be scanned.
    This is used for communication to and from the caller
@@ -133,7 +135,7 @@ int optind = 1;
    causes problems with re-calling getopt as programs generally don't
    know that. */
 
-int __getopt_initialized;
+int __getopt_initialized = 0;
 
 /* The next char to be scanned in the option-element
    in which the last option character we returned was found.
@@ -204,7 +206,9 @@ static char *posixly_correct;
 # if HAVE_STRING_H
 #  include <string.h>
 # else
-#  include <strings.h>
+#  if HAVE_STRINGS_H
+#   include <strings.h>
+#  endif
 # endif
 
 /* Avoid depending on library functions or files
@@ -331,8 +335,8 @@ exchange (argv)
 	nonoption_flags_len = nonoption_flags_max_len = 0;
       else
 	{
-	  memset (__mempcpy (new_str, __getopt_nonoption_flags,
-			     nonoption_flags_max_len),
+	  memset (mempcpy (new_str, __getopt_nonoption_flags,
+			   nonoption_flags_max_len),
 		  '\0', top + 1 - nonoption_flags_max_len);
 	  nonoption_flags_max_len = top + 1;
 	  __getopt_nonoption_flags = new_str;
@@ -442,7 +446,7 @@ _getopt_initialize (argc, argv, optstring)
 	      if (__getopt_nonoption_flags == NULL)
 		nonoption_flags_max_len = -1;
 	      else
-		memset (__mempcpy (__getopt_nonoption_flags, orig_str, len),
+		memset (mempcpy (__getopt_nonoption_flags, orig_str, len),
 			'\0', nonoption_flags_max_len - len);
 	    }
 	}
@@ -520,13 +524,6 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
      int *longind;
      int long_only;
 {
-  int print_errors = opterr;
-  if (optstring[0] == ':')
-    print_errors = 0;
-
-  if (argc < 1)
-    return -1;
-
   optarg = NULL;
 
   if (optind == 0 || !__getopt_initialized)
@@ -676,18 +673,15 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 		pfound = p;
 		indfound = option_index;
 	      }
-	    else if (long_only
-		     || pfound->has_arg != p->has_arg
-		     || pfound->flag != p->flag
-		     || pfound->val != p->val)
+	    else
 	      /* Second or later nonexact match found.  */
 	      ambig = 1;
 	  }
 
       if (ambig && !exact)
 	{
-	  if (print_errors)
-	    fprintf (stderr, _("%s: option `%s' is ambiguous\n"),
+	  if (opterr)
+	    printf (_("%s: option `%s' is ambiguous\n"),
 		     argv[0], argv[optind]);
 	  nextchar += strlen (nextchar);
 	  optind++;
@@ -707,24 +701,22 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 		optarg = nameend + 1;
 	      else
 		{
-		  if (print_errors)
+		  if (opterr)
 		    {
 		      if (argv[optind - 1][1] == '-')
 			/* --option */
-			fprintf (stderr,
-				 _("%s: option `--%s' doesn't allow an argument\n"),
+			printf (_("%s: option `--%s' doesn't allow an argument\n"),
 				 argv[0], pfound->name);
 		      else
 			/* +option or -option */
-			fprintf (stderr,
-				 _("%s: option `%c%s' doesn't allow an argument\n"),
+			printf (_("%s: option `%c%s' doesn't allow an argument\n"),
 				 argv[0], argv[optind - 1][0], pfound->name);
+
+		      nextchar += strlen (nextchar);
+
+		      optopt = pfound->val;
+		      return '?';
 		    }
-
-		  nextchar += strlen (nextchar);
-
-		  optopt = pfound->val;
-		  return '?';
 		}
 	    }
 	  else if (pfound->has_arg == 1)
@@ -733,9 +725,8 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 		optarg = argv[optind++];
 	      else
 		{
-		  if (print_errors)
-		    fprintf (stderr,
-			   _("%s: option `%s' requires an argument\n"),
+		  if (opterr)
+		    printf (_("%s: option `%s' requires an argument\n"),
 			   argv[0], argv[optind - 1]);
 		  nextchar += strlen (nextchar);
 		  optopt = pfound->val;
@@ -760,15 +751,15 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
       if (!long_only || argv[optind][1] == '-'
 	  || my_index (optstring, *nextchar) == NULL)
 	{
-	  if (print_errors)
+	  if (opterr)
 	    {
 	      if (argv[optind][1] == '-')
 		/* --option */
-		fprintf (stderr, _("%s: unrecognized option `--%s'\n"),
+		printf (_("%s: unrecognized option `--%s'\n"),
 			 argv[0], nextchar);
 	      else
 		/* +option or -option */
-		fprintf (stderr, _("%s: unrecognized option `%c%s'\n"),
+		printf (_("%s: unrecognized option `%c%s'\n"),
 			 argv[0], argv[optind][0], nextchar);
 	    }
 	  nextchar = (char *) "";
@@ -790,14 +781,14 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 
     if (temp == NULL || c == ':')
       {
-	if (print_errors)
+	if (opterr)
 	  {
 	    if (posixly_correct)
 	      /* 1003.2 specifies the format of this message.  */
-	      fprintf (stderr, _("%s: illegal option -- %c\n"),
+	      printf (_("%s: illegal option -- %c\n"),
 		       argv[0], c);
 	    else
-	      fprintf (stderr, _("%s: invalid option -- %c\n"),
+	      printf (_("%s: invalid option -- %c\n"),
 		       argv[0], c);
 	  }
 	optopt = c;
@@ -824,10 +815,10 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 	  }
 	else if (optind == argc)
 	  {
-	    if (print_errors)
+	    if (opterr)
 	      {
 		/* 1003.2 specifies the format of this message.  */
-		fprintf (stderr, _("%s: option requires an argument -- %c\n"),
+		printf (_("%s: option requires an argument -- %c\n"),
 			 argv[0], c);
 	      }
 	    optopt = c;
@@ -873,8 +864,8 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 	    }
 	if (ambig && !exact)
 	  {
-	    if (print_errors)
-	      fprintf (stderr, _("%s: option `-W %s' is ambiguous\n"),
+	    if (opterr)
+	      printf (_("%s: option `-W %s' is ambiguous\n"),
 		       argv[0], argv[optind]);
 	    nextchar += strlen (nextchar);
 	    optind++;
@@ -891,8 +882,8 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 		  optarg = nameend + 1;
 		else
 		  {
-		    if (print_errors)
-		      fprintf (stderr, _("\
+		    if (opterr)
+		      printf (_("\
 %s: option `-W %s' doesn't allow an argument\n"),
 			       argv[0], pfound->name);
 
@@ -906,9 +897,8 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 		  optarg = argv[optind++];
 		else
 		  {
-		    if (print_errors)
-		      fprintf (stderr,
-			       _("%s: option `%s' requires an argument\n"),
+		    if (opterr)
+		      printf (_("%s: option `%s' requires an argument\n"),
 			       argv[0], argv[optind - 1]);
 		    nextchar += strlen (nextchar);
 		    return optstring[0] == ':' ? ':' : '?';
@@ -953,12 +943,11 @@ _getopt_internal (argc, argv, optstring, longopts, longind, long_only)
 	      }
 	    else if (optind == argc)
 	      {
-		if (print_errors)
+		if (opterr)
 		  {
 		    /* 1003.2 specifies the format of this message.  */
-		    fprintf (stderr,
-			     _("%s: option requires an argument -- %c\n"),
-			     argv[0], c);
+		    printf (_("%s: option requires an argument -- %c\n"),
+			   argv[0], c);
 		  }
 		optopt = c;
 		if (optstring[0] == ':')
