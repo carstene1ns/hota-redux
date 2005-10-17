@@ -103,67 +103,6 @@ unsigned short next_pc_word()
 	return (left << 8) | right;
 }
 
-void fill_line_reversed(int count, int x, int y, int color)
-{
-	unsigned char *bufp;
-
-	if (x < 0 || y < 0 || y > 191)
-	{
-		LOG(("out of screen\n"));
-		return;
-	}
-
-	if (x - count < 0)
-	{
-		count = x + 1;
-	}
-
-	if (x > 303)
-	{
-		count = count - (x - 303);
-		x = 303;
-	}
-
-	bufp = (unsigned char *)get_selected_screen_ptr() + (y * 304) + x;
-	while (count > 0)
-	{
-		*bufp-- = color;
-		count--;
-	}
-}
-
-void fill_line(int count, int x, int y, int color)
-{
-	unsigned char *bufp;
-
-	//LOG(("fill line count=%d, x=%d, y=%d, color=%d\n", count, x, y, color));
-
-	/* output offset */
-	if (x > 303 || y > 191 || y < 0)
-	{
-		LOG(("WARN: out of screen! (x=%d, y=%d)\n", x, y));
-		return;
-	}
-
-	while (x < 0)
-	{
-		x++;
-		count--;
-	}
-
-	if (x + count > 303)
-	{
-		count = 303 - x + 1;
-	}
-
-	bufp = (unsigned char *)get_selected_screen_ptr() + (y * 304) + x;
-	while (count > 0)
-	{
-		*bufp++ = color;
-		count--;
-	}
-}
-
 /** Loads sprite from resource into sprite list
     @param index       sprite identifier
     @param list_entry  position in sprite list

@@ -24,6 +24,7 @@
 #include "vm.h"
 #include "common.h"
 #include "render.h"
+#include "screen.h"
 
 const char *sprite_data_byte_str[16] =
 {

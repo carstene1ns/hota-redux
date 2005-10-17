@@ -18,4 +18,4 @@ alien: $(OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm $(OBJS)
+	@rm $(OBJS)

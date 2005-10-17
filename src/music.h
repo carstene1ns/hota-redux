@@ -28,7 +28,7 @@ void stop_music();
 /** Callback after a frame has been rendered */
 void music_update();
 
-/** Plays audio track */
+/** Plays audio track
     @param track   track to play
     @param loop    loop count
 */

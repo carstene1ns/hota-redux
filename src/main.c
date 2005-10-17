@@ -563,9 +563,11 @@ void check_events()
 				key_c = 1;
 				break;
 	
-				case SDLK_d:
+				#ifdef ENABLE_DEBUG
+				case SDLK_g:
 				debug_flag ^= 1;
 				break;
+				#endif
 	
 				case SDLK_F5:
 				quicksave();
