@@ -30,6 +30,12 @@
 #include "sprites.h"
 #include "animation.h"
 
+#if defined( _MSC_VER )
+/* Visual C++ (and Intel C++) */
+/* disable 'integral size mistmatch in argument: conversion supplied. */
+#pragma warning( disable : 4761 )
+#endif
+
 //////
 extern unsigned short variables[];
 extern unsigned short auxvars[];
@@ -42,6 +48,8 @@ extern short new_task_pc[64];
 extern short enabled_tasks[64];
 extern short new_enabled_tasks[64];
 
+void load_room_screen(int room, int index);
+
 //////
 
 static char *cmpopar[6] = {"==", "!=", ">", ">=", "<", "<="};
@@ -52,12 +60,18 @@ int script_ptr;
 static int stack[128];
 static int stack_ptr = 0;
 
+/** Pushes an element into stack
+    @param v  element
+*/
 static void push(int v)
 {
 	assert(stack_ptr < 128);
 	stack[stack_ptr++] = v;
 }
 
+/** Pops last element from stack
+    @returns element
+*/
 static int pop()
 {
 	assert(stack_ptr > 0);
@@ -65,6 +79,9 @@ static int pop()
 	return stack[stack_ptr];
 }
 
+/** Loads the next byte from script
+    @returns value
+*/
 unsigned char next_pc()
 {
 	unsigned char rv;
@@ -74,13 +91,16 @@ unsigned char next_pc()
 	return rv;
 }
 
+/** Loads the next word from script
+    @returns value
+*/
 unsigned short next_pc_word()
 {
 	int left, right;
 
 	left = next_pc();
 	right = next_pc();
-	return (left << 8) + right;
+	return (left << 8) | right;
 }
 
 void fill_line_reversed(int count, int x, int y, int color)
@@ -144,209 +164,10 @@ void fill_line(int count, int x, int y, int color)
 	}
 }
 
-void render_sprite(int list_entry)
-{
-	unsigned long dword_0_DC7A;
-	unsigned long d0, d1, d2, d3, d4, d6;
-	int d7;
-	int offset;
-	int color;
-	int a2, a3;
-	int count;
-	int sx, sy;
-	int x, y, dx, dy;
-
-	dword_0_DC7A = -1;
-
-	/* d89e */
-	d2 = sprites[list_entry].index;
-
-	a3 = get_long(0xf904) + (d2 << 2);
-	a3 = get_long(a3);
-
-	d0 = d1 = d2 = 0;
-	x = extl(sprites[list_entry].x);
-	y = extl(sprites[list_entry].y);
-
-	d3 = y*304 + x;
-
-	d2 = sprites[list_entry].frame & 0x7f;
-	d1 = get_word(a3 + d2*2 + 6);
-	a2 = a3 + d1 + 4;
-	d6 = get_word(a2);
-	a2 += 2;
-	
-	color = 0;
-
-	/* d8ea */
-	d6 = d6 | 0x10000; /* bit 17th turned on, to break loop */
-	loc_d8ee:
-	if (d6 & (1 << color))
-	{
-		goto loc_d8f8;
-	}
-
-	color++;
-	goto loc_d8ee;
-
-	loc_d8f8:
-	if (color >= 16)
-	{
-		goto leave;
-	}
-
-	if (sprites[list_entry].frame & 0x80)
-	{
-		goto sprite_mirrored;
-	}
-
-	loc_d916:
-	/* d2 is color */
-
-	loc_d91e:
-	offset = get_word(a2); /* relative offset */
-	a2 = a2 + 2;
-	dx = offset % 304;
-	dy = offset / 304;
-	sx = x + dx;
-	sy = y + dy;
-	count = get_byte(a2++) + 1;
-	fill_line(count, sx, sy, color);
-
-	loc_d93c:
-	d7 = get_byte(a2++);
-	if (d7 == 0x99)
-	{
-		/* repeat using the same color! */
-		goto loc_d91e;
-	}
-
-	if (d7 == 0xaa)
-	{
-		goto loc_d986;
-	}
- 
-	/* d94a */
-	/* d7: two signed nibbles */
-	d4 = d7;
-
-	d7 = extn(d7 & 0x0f); /* delta-count */
-	dx = extn(d4 >> 4);
-	count = count + d7 - dx;
-
-	sy = sy + 1;
-	sx = sx + dx;
-	fill_line(count, sx, sy, color);
-	goto loc_d93c;
-
-	loc_d986:
-	color++;
-
-	/* look for next bit */
-	while (1)
-	{
-		if (d6 & (1 << color))
-		{
-			break;
-		}
-
-		color++;
-	}
-
-	if (color < 16)
-	{
-		goto loc_d916;
-	}
-
-	leave:
-	return;
-
-	sprite_mirrored:
-	loc_d9ac:
-	/* d9a6 */
-	/* d2 is color */
-	loc_d9b4:
-	offset = get_word(a2);
-	a2 += 2;
-
-	dx = offset % 304;
-	dy = offset / 304;
-	sx = x - dx;
-	sy = y + dy;
-
-	count = get_byte(a2++) + 1;
-	fill_line_reversed(count, sx, sy, color);
-
-	loc_d9e2:
-	d7 = get_byte(a2++);
-	if (d7 == 0x99)
-	{
-		goto loc_d9b4;
-	}
-
-	if (d7 == 0xaa)
-	{
-		goto loc_da2c;
-	}
-
-	d4 = d7;
-	d7 = extn(d7 & 0x0f);
-	dx = extn(d4 >> 4);
-	count = count + d7 - dx;
-
-	sy = sy + 1;
-	sx = sx - dx;
-
-	fill_line_reversed(count, sx, sy, color);
-	goto loc_d9e2;
-
-	loc_da2c:
-	color++;
-
-	loc_da34:
-	if (d6 & (1 << color))
-	{
-		goto loc_da3e;
-	}
-
-	color++;
-	goto loc_da34;
-
-	loc_da3e:
-	if (color < 16)
-	{
-		goto loc_d9ac;
-	}
-}
-
-void draw_sprites()
-{
-	LOG(("draw_sprites"));
-
-	if (sprite_count != 0)
-	{
-		unsigned char d1;
-
-		d1 = first_sprite;
-		while (1)
-		{
-			if ((sprites[d1].u1 & FLAG_HIDDEN) == 0)
-			{
-				/* visible */
-				render_sprite(d1);
-			}
-
-			d1 = sprites[d1].next;
-			if (d1 == 0)
-			{
-				break;
-			}
-
-			LOG(("linkedup to %d\n", d1));
-		}
-	}
-}
-
+/** Loads sprite from resource into sprite list
+    @param index       sprite identifier
+    @param list_entry  position in sprite list
+*/
 void load_sprite(int index, int list_entry)
 {
 	unsigned long a2, a4;
@@ -400,7 +221,7 @@ void load_sprite(int index, int list_entry)
 
 	/* cc42 */
 	d1 = get_byte(a4 + 4);
-	sprites[list_entry].u7 = d1;
+	sprites[list_entry].u7 = (unsigned char)d1;
 	d1 = d1 >> 1;
 	d3 = d3 - d1;
 	sprites[list_entry].w4 = d2;
@@ -1052,7 +873,7 @@ void add_sprite()
 		/* bde8 */
 		d2 = last_sprite;
 		set_variable(2, d2);
-		first_sprite = d2;
+		first_sprite = (char)d2;
 		entry_a6 = d2;
 		last_sprite = sprites[entry_a6].next;
 
@@ -1151,7 +972,7 @@ void add_sprite()
 			d2 = last_sprite;
 			set_variable(2, d2);
 			d3 = first_sprite;
-			first_sprite = d2;
+			first_sprite = (char)d2;
 			entry_a6 = d2;
 			last_sprite = sprites[entry_a6].next;
 			d1 = next_pc();
@@ -1174,7 +995,14 @@ void add_sprite()
 	}
 }
 
-void is_last_frame_in_animation(int entry)
+/** Checks if the sprite has reached the end of its animation
+    @param entry  offset in sprite list
+ 
+    Each sprite is associated with frame number. This will check if
+    the animation has reached its last frame, so the script can rewind
+    the sequence
+*/
+static int is_last_frame_in_animation(int entry)
 {
 	int a4, d0;
 
@@ -1184,50 +1012,7 @@ void is_last_frame_in_animation(int entry)
 	/* returns 1 if sprite has reached the last frame of its sequence */
 
 	d0 = sprites[entry].frame & 0x7f;
-	if (d0 < get_byte(a4))
-	{
-		set_variable(2, 0);
-	}
-	else
-	{
-		set_variable(2, 1);
-	}
-}
-
-void copy_tls_to_global()
-{
-	int src_index, dst_index, count;
-
-	dst_index = next_pc();
-	src_index = next_pc();
-	count = next_pc();
-
-	/* copy variables from variables to active-var-vector */
-	while (count >= 0)
-	{
-		LOG(("copy tls-var %d into globalvar %d\n",  src_index, dst_index));
-		variables[dst_index++] = get_variable(src_index++);
-		count--;
-	}
-}
-
-void copy_global_to_tls()
-{
-	int src_index, dst_index, count;
-
-	dst_index = next_pc();
-	src_index = next_pc();
-	count = next_pc();
-
-	LOG(("copy %d from global to tls starting at src=%d, dst=%d\n", count + 1, src_index, dst_index));
-
-	/* copy variables from variables to active-var-vector */
-	while (count >= 0)
-	{
-		LOG(("copy globalvar %d into tls-var %d\n", src_index, dst_index));
-		set_variable(dst_index++, variables[src_index++]);
-		count--;
-	}
+	return (d0 >= get_byte(a4));
 }
 
 void op_89()
@@ -2764,8 +2549,9 @@ int decode(int current_task, int start_pc)
 
 			case 0x7d:
 			imm16 = get_variable(next_pc());
-			is_last_frame_in_animation(imm16);
-			LOG(("check if current frame exceeded frame count for sprite %d\n", imm16));
+			imm16_2 = is_last_frame_in_animation(imm16);
+			set_variable(2, imm16_2);
+			LOG(("check if current frame exceeded frame count for sprite %d (%d)\n", imm16, imm16_2));
 			break;
 
 			case 0x7e:
@@ -2804,11 +2590,23 @@ int decode(int current_task, int start_pc)
 			break;
 
 			case 0x83:
-			copy_global_to_tls();
+			{
+				int dst_index = next_pc();
+				int src_index = next_pc();
+				int count = next_pc();
+				LOG(("copy globalvar %d to tls-var %d, count %d\n", src_index, dst_index, count));
+				copy_global_to_tls(dst_index, src_index, count);
+			}
 			break;
 
 			case 0x84:
-			copy_tls_to_global();
+			{
+				int dst_index = next_pc();
+				int src_index = next_pc();
+				int count = next_pc();
+				LOG(("copy tls-var %d into globalvar %d, count %d\n",  src_index, dst_index, count));
+				copy_tls_to_global(dst_index, src_index, count);
+			}
 			break;
 	
 			case 0x87:
