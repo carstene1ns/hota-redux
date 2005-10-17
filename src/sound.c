@@ -1,6 +1,6 @@
 /*
  * Heart of The Alien: SFX handling
- * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,8 @@ extern int nosound_flag;
 /* cached samples, useless convertions and allocations hurt my eyes! */
 static Mix_Chunk *cached_samples[256];
 
-/* stop all channels from playing */
+/** Stops all 4 channels
+*/
 static void stop_all_channels()
 {
 	int p;
@@ -44,7 +45,16 @@ static void stop_all_channels()
 	}
 }
 
-/* play a single sample, on a specific channel (out of 4) */
+/** Start playing a sample
+    @param index     sample identifier
+    @param volume    volume [0 .. 0xff]
+    @param channel   mixing channel [0 .. 3]
+
+    Samples on sega-cd are 8000 hz, 8bit signed. each sample is
+    converted to native format before being mixed. since it is quite
+    an overkill to convert every time, converted samples are stored
+    in cache until purged manually.
+*/
 void play_sample(int index, int volume, int channel)
 {
 	int length, outlen, ptr;
@@ -108,13 +118,9 @@ void play_sample(int index, int volume, int channel)
 		{
 			s = 0 - (u & 0x7f);
 		}
-		else if (u < 0x80)
+		else if (u <= 0x80)
 		{
 			s = u;
-		}
-		else
-		{
-			s = 0x00;
 		}
 	
 		*current_sample++ = s;
@@ -134,13 +140,19 @@ void play_sample(int index, int volume, int channel)
 	Mix_PlayChannel(channel, chunk, 0);
 }
 
-/* module initializer */
-void sound_init()
+/** Initialize sound module
+    @returns zero on success, negative value on error
+*/
+int sound_init()
 {
 	memset((void *)cached_samples, '\0', sizeof(cached_samples));
+	return 0;
 }
 
-/* free all memory allocated for cached sound effects */
+/** Purges all cached sound effects from memory
+
+    Releases memory taken by sfx previously played by play_sample()
+*/
 void sound_flush_cache()
 {
 	int i, elem;
@@ -156,7 +168,7 @@ void sound_flush_cache()
 	}
 }
 
-/* callback when game script has been unloaded */
+/** callback when game script has been unloaded */
 void sound_done()
 {
 	sound_flush_cache();

@@ -1,6 +1,6 @@
 /*
  * Heart of The Alien: Backdrop decoder
- * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +20,17 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
 #include "vm.h"
 #include "lzss.h"
 
+/* 'room' is the prefix given to data files on the iso9660. */
+
+/** Unpacks a backdrop
+    @param out    framebuffer to render onto
+    @param entry  backdrop index
+
+    Merely a wrapper to the lzss decoder
+*/
 int unpack_room(void *out, int entry)
 {
 	int d0, a2, a3;

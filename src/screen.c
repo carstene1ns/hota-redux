@@ -25,6 +25,8 @@
 #include "render.h"
 #include "screen.h"
 
+#define VAR_VSCROLL 249
+
 /* instead of allocations. makes porting to consoles easier. */
 static char huge_buf[304*192*3];
 
@@ -37,6 +39,10 @@ static char *selected_screen_ptr;
 
 static short scroll_reg = 0;
 
+/** Fills the entire screen with a single color
+    @param dest     --unused--
+    @param color    entry from 4 bit palette
+*/
 void fill_screen(int dest, char color)
 {
 	memset((void *)selected_screen_ptr, color, 304*192);
@@ -51,7 +57,7 @@ void copy_screen(int dest, int src)
 
 	if (src == 0xc0)
 	{
-		set_variable(249, scroll_reg);
+		set_variable(VAR_VSCROLL, scroll_reg);
 		/* XXX return ? */
 	}
 
@@ -95,12 +101,24 @@ char *get_screen_ptr(int which)
 	return screens[0];
 }
 
+/** Selects working-screen
+    @param which   identifier (see screen identification comment above)
+*/
 void select_screen(int which)
 {
 	selected_screen = which;
 	selected_screen_ptr = get_screen_ptr(which);
 }
 
+/** Renders (rasters) the requested screen
+    @param which   screen identifier (see comment above)
+
+    Called by script when a frame is about to complete, and rendering
+    is to be done before proceeding to the next frame. this will 
+    convert the 4-bit framebuffer to the native video output format. it
+    is also possible to flip between visible and invisible buffers using
+    which == 0xff
+*/
 void update_screen(int which)
 {
 	char *src;
@@ -130,16 +148,25 @@ void update_screen(int which)
 	render(src);
 }
 
+/** Returns the identifier of the working-screen
+    @returns screen identifier
+*/
 int get_selected_screen()
 {
 	return selected_screen;
 }
 
+/** Returns framebuffer address of working-screen
+    @returns pointer to framebuffer 
+*/
 char *get_selected_screen_ptr()
 {
 	return selected_screen_ptr;
 }
 
+/** Initializes screen module
+    @returns zero on success, negative value on error
+*/
 int screen_init()
 {
 	/* screen 1 and 2 share same framebuffer! */
