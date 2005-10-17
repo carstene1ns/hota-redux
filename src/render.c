@@ -39,17 +39,27 @@ static int palette_changed = 0;
 static int current_palette = 0;
 static SDL_Color palette[256];
 
+/** Returns the current palette used
+    @returns palette
+
+    Palettes are stored in game2.bin
+*/
 int get_current_palette()
 {
 	return current_palette;
 }
 
-/* set scroll register */
+/** Sets VSCROLL value
+    @param scroll
+*/
 void set_scroll(int scroll)
 {
 	scroll_reg = scroll;
 }
 
+/** Returns VSCROLL register value
+    @returns vscroll
+*/
 int get_scroll_register()
 {
 	return scroll_reg;
@@ -109,7 +119,9 @@ void render3x_scaled(char *src)
 	scale3x(screen, src, 304, 304, 192);
 }
 
-/* simple x2 scaler */
+/** Simple X2 scaler
+    @param src
+*/
 void render2x(char *src)
 {
 	int x, y;
@@ -132,7 +144,9 @@ void render2x(char *src)
 	}
 }
 
-/* simple x3 scaler */
+/** Simple X3 scaler
+    @param src
+*/
 void render3x(char *src)
 {
 	int x, y;
@@ -157,7 +171,9 @@ void render3x(char *src)
 	}
 }
 
-/* render a virtual screen */
+/** Renders a virtual screen
+    @param src
+*/
 void render(unsigned char *src)
 {
 	SDL_LockSurface(screen);
@@ -202,18 +218,22 @@ void render(unsigned char *src)
 	SDL_UnlockSurface(screen);
 }
 
-/* module initializer */
+/** Module initializer
+    @returns zero on success
+*/
 int render_init()
 {
 	return 0;
 }
 
-/* convert a Sega CD RGB444 to RGB888 */
+/** Converts a Sega CD RGB444 to RGB888 
+    @param rgb12   pointer to 16x2 of palette data
+*/
 void set_palette_rgb12(unsigned char *rgb12)
 {
 	int i;
 
-	for (i=0; i<256; i++)
+	for (i=0; i<16; i++)
 	{
 		int c, r, g, b;
 
@@ -252,7 +272,7 @@ void toggle_fullscreen()
 		return;
 	}
 
-	fullscreen = 1 - fullscreen;
+	fullscreen = 1 ^ fullscreen;
 	SDL_FreeSurface(screen);
 	screen = 0;
 
