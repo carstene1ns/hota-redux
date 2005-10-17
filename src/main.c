@@ -1,6 +1,6 @@
 /*
  * Heart of The Alien: Game loop and main
- * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 #include <SDL.h>
 #include <SDL_mixer.h>
 
+#include "client.h"
 #include "vm.h"
 #include "rooms.h"
 #include "debug.h"
@@ -37,35 +38,44 @@
 #include "sprites.h"
 #include "game2bin.h"
 #include "animation.h"
-
-#ifdef WIN32
 #include "getopt.h"
-#endif
 
 static char *VERSION = "1.2.2";
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
 
+typedef struct anm_file_s
+{
+	int track;
+	const char *filename;
+	int offset;
+} anm_file_t;
+
+static anm_file_t anm_files[] = 
+{
+	{31, "INTRO1.BIN", 0},
+	{32, "INTRO2.BIN", 0},
+	{33, "INTRO3.BIN", 0},
+	{34, "INTRO4.BIN", 0},
+	{35, "MAKE2MB.BIN", 0x109a},
+	{36, "MID2.BIN", 0},
+	{37, "END1.BIN", 0},
+	{38, "END2.BIN", 0},
+	{39, "END3.BIN", 0},
+	{40, "END4.BIN", 0}
+};
+
 ///////
 extern int script_ptr;
-extern int first_sprite, last_sprite, sprite_count;
-extern int pc;
 
-extern unsigned char memory[];
-extern unsigned short variables[];
-
-int quit = 0;
 int next_script;
 int current_backdrop;
 int current_room;
 
 int filtered_flag = 0;
 int speed_throttle = 0;
-int scale = 1;
 
-int iso_flag = 0;
-int nosound_flag = 0;
 int debug_flag = 0;
 int test_flag = 0;
 int record_flag = 0;
@@ -78,12 +88,21 @@ short new_task_pc[64];
 short enabled_tasks[64];
 short new_enabled_tasks[64];
 
-int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
-int key_reset_record;
+static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
+static int key_reset_record;
 
+#define RECORDED_KEYS_CACHE 4096
+static int cached_keys_offset = 0;
+static unsigned char cached_recorded_keys[RECORDED_KEYS_CACHE];
+
+/** file descriptor where keys are written to, or read from */
 FILE *record_fp = 0;
 
 SDL_Surface *screen;
+
+/** scratchpad used for unpacking code */
+static unsigned char scratchpad[29184];
+
 
 #ifdef ENABLE_DEBUG
 short old_var[256+64*32];
@@ -92,12 +111,14 @@ short old_var[256+64*32];
 static int load_room(int index)
 {
 	char filename[16];
+	unsigned char *ptr;
 
 	strcpy(filename, "ROOMS0.BIN");
 	filename[5] = (index + '0');
 
 	LOG(("loading %s\n", filename));
-	if (read_file(filename, memory + 0xf900) < 0)
+	ptr = get_memory_ptr(0xf900);
+	if (read_file(filename, ptr) < 0)
 	{
 		panic("load_room failed");
 	}
@@ -110,6 +131,8 @@ static int load_room(int index)
 	return 0;
 }
 
+/** atexit() callback
+*/
 static void atexit_callback(void)
 {
 	stop_music();
@@ -121,7 +144,7 @@ static int initialize()
 	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_CDROM|SDL_INIT_AUDIO);
 	atexit(atexit_callback);
 
-	if (nosound_flag == 0)
+	if (cls.nosound == 0)
 	{
 		if (Mix_OpenAudio(44100, AUDIO_S16, 2, 4096) < 0) 
 		{
@@ -142,7 +165,6 @@ static int initialize()
 		panic("can't read GAME2.BIN file");
 	}
 
-
 	screen_init();
 	
 	vm_reset();
@@ -156,31 +178,50 @@ static int initialize()
 	return 0;
 }
 
+/** Loads a screen from room file
+    @param room    suffix for room%d.bin file
+    @param index   screen number
+*/
 void load_room_screen(int room, int index)
 {
 	int i;
 	unsigned char *pixels;
-	unsigned char buffer[29184];
 
 	LOG(("loading room screen %d from room file %d\n", index - 1, room));
 
-	unpack_room(buffer, index - 1);           
+	unpack_room(scratchpad, index - 1);           
 
-	/*
-	memset(palette, '\0', sizeof(palette));
-	SDL_SetColors(screen, palette, 0, 256);	
-	*/
-
+	/* convert 4bpp -> 8bpp */
 	pixels = get_screen_ptr(0);
 	for (i=0; i<304*192/2; i++)
 	{
-		pixels[i*2+0] = buffer[i] >> 4;
-		pixels[i*2+1] = buffer[i] & 0xf;
+		pixels[i*2+0] = scratchpad[i] >> 4;
+		pixels[i*2+1] = scratchpad[i] & 0xf;
 	}
 
 	current_backdrop = index;
 }
 
+/** Rewinds (clears) the recorded-keys cache
+*/
+void rewind_recorded_keys()
+{
+	cached_keys_offset = 0;
+}
+
+/** Writes down all the recored keys, and rewinds
+*/
+void flush_recorded_keys()
+{
+	fwrite(cached_recorded_keys, 1, cached_keys_offset, record_fp);
+	cached_keys_offset = 0;
+}
+
+/** Reads keystate from record file
+
+    Will read information sufficient for one rendered frame; if the
+    record file ended already, all keys will be considered 'released'
+*/
 void read_keys_from_record()
 {
 	int c = fgetc(record_fp);
@@ -201,31 +242,37 @@ void read_keys_from_record()
 	key_select = (c >> 0) & 1;
 }
 
-void write_keys_to_record()
+/** Adds a single key to the record file
+
+    Adds a key to the cache array of recorded keys; if the array 
+    is full, it will force flushing
+*/
+void add_keys_to_record()
 {
 	int c;
 
-	if (key_reset_record == 0)
-	{	
-		c = (key_up << 7) | (key_down << 6);
-		c = c | (key_left << 5) | (key_right << 4);
-		c = c | (key_a << 3) | (key_b << 2);
-		c = c | (key_c << 1) | key_select;
-	}
-	else
-	{
-		c = 0xff;
-	}
+	c = (key_up << 7) | (key_down << 6);
+	c = c | (key_left << 5) | (key_right << 4);
+	c = c | (key_a << 3) | (key_b << 2);
+	c = c | (key_c << 1) | key_select;
 
-	fputc(c, record_fp);
+ 	cached_recorded_keys[cached_keys_offset++] = c;
+ 	if (cached_keys_offset == sizeof(cached_recorded_keys))
+	{
+ 		/* if the player never quicksaves or quickloads */
+		flush_recorded_keys();
+	}
 }
 
+/** Translates gamepad presses and updates variables
+
+    Entry at b6c4
+*/
 void update_keys()
 {
 	short flags;
 
-	/* b6c4 */
-	toggle_aux(0); // fixme: remove to somewhere else
+	toggle_aux(0);           /* me and my paranoia */
 	set_variable(253, 0);
 	set_variable(252, 0);
 	set_variable(229, 0);
@@ -271,15 +318,17 @@ void update_keys()
 
 	if (key_b)
 	{
-		set_variable(254, get_variable(254) | 0x40);
+		set_variable(254, (unsigned short)(get_variable(254) | 0x40));
 	}
 	else if (key_a)
 	{
 		set_variable(250, 1);
-		set_variable(254, get_variable(254) | 0x80);
+		set_variable(254, (unsigned short)(get_variable(254) | 0x80));
 	}
 }
 
+/** Loads a quicksave file
+*/
 void quickload()
 {
 	int i, j;
@@ -317,53 +366,27 @@ void quickload()
 		}
 	}
 
+	/* when frame ends, aux is always zero anyway */
 	toggle_aux(0);
 
 	for (i=0; i<MAX_TASKS; i++)
 	{
 		task_pc[i] = fgetw(fp);
-	}
-
-	for (i=0; i<MAX_TASKS; i++)
-	{
 		new_task_pc[i] = fgetw(fp);
-	}
-		
-	for (i=0; i<MAX_TASKS; i++)
-	{
 		enabled_tasks[i] = fgetw(fp);
-	}
-
-	for (i=0; i<MAX_TASKS; i++)
-	{
 		new_enabled_tasks[i] = fgetw(fp);
 	}
 
-	for (i=0; i<MAX_SPRITES; i++)
-	{
-		sprite_t *spr = &sprites[i];
-
-		spr->index = fgetc(fp);
-		spr->u1 = fgetc(fp);
-		spr->next = fgetc(fp);
-		spr->frame = fgetc(fp);
-		spr->x = fgetw(fp);
-		spr->y = fgetw(fp);
-		spr->u2 = fgetc(fp);
-		spr->u3 = fgetc(fp);
-		spr->w4 = fgetw(fp);
-		spr->w5 = fgetw(fp);
-		spr->u6 = fgetc(fp);
-		spr->u7 = fgetc(fp);
-	}
-
-	first_sprite = fgetc(fp);
- 	sprite_count = fgetc(fp);
-	last_sprite = fgetc(fp);
+	quickload_sprites(fp);
 
 	fclose(fp);
 }
 
+/** Creates a quicksave file
+
+    Quicksave file includes all that is required so later on a user can
+    use the quickload and be provided with the exact same game state. 
+*/    
 void quicksave()
 {
 	int i, j;
@@ -401,196 +424,183 @@ void quicksave()
 	for (i=0; i<MAX_TASKS; i++)
 	{
 		fputw(task_pc[i], fp);
-	}
-
-	for (i=0; i<MAX_TASKS; i++)
-	{
 		fputw(new_task_pc[i], fp);
-	}
-		
-	for (i=0; i<MAX_TASKS; i++)
-	{
 		fputw(enabled_tasks[i], fp);
-	}
-
-	for (i=0; i<MAX_TASKS; i++)
-	{
 		fputw(new_enabled_tasks[i], fp);
 	}
 
-	for (i=0; i<MAX_SPRITES; i++)
-	{
-		sprite_t *spr = &sprites[i];
-
-		fputc(spr->index, fp);
-		fputc(spr->u1, fp);
-		fputc(spr->next, fp);
-		fputc(spr->frame, fp);
-		fputw(spr->x, fp);
-		fputw(spr->y, fp);
-		fputc(spr->u2, fp);
-		fputc(spr->u3, fp);
-		fputw(spr->w4, fp);
-		fputw(spr->w5, fp);
-		fputc(spr->u6, fp);
-		fputc(spr->u7, fp);
-	}
-
-	fputc(first_sprite, fp);
- 	fputc(sprite_count, fp);
-	fputc(last_sprite, fp);
-
+	quicksave_sprites(fp);
 	fclose(fp);
 }
 
+void leave_game()
+{
+	flush_recorded_keys();
+	exit(0);
+}
+
+/** Processes SDL events
+
+    This processes windows messages, keyboard pressed, joystick moves,
+    and general SDL events
+*/
 void check_events()
 {
 	SDL_Event event;
 
-	SDL_PollEvent(&event);
-        switch (event.type) 
+	while (SDL_PollEvent(&event))
 	{
-		case SDL_KEYUP:
-		switch(event.key.keysym.sym)
+	        switch (event.type) 
 		{
-			case SDLK_RIGHT:
-			key_right = 0;
-			break;
-
-			case SDLK_LEFT:
-			key_left = 0;
-			break;
-
-			case SDLK_UP:
-			key_up = 0;
-			break;
-
-			case SDLK_DOWN:
-			key_down = 0;
-			break;
-
-			case SDLK_z:
-			key_a = 0;
-			break;
-
-			case SDLK_x:
-			key_b = 0;
-			break;
-
-			case SDLK_c:
-			key_c = 0;
-			break;
-
-			case SDLK_q:
-			key_a = 0;
-			key_reset_record = 0;
-			break;
-
-			case SDLK_SPACE:
-			speed_throttle = 0;
-			break;
-
-			default:
-			/* keep -Wall happy */
-			break;
-		}
-		break;
-
-        	case SDL_KEYDOWN:
-		switch(event.key.keysym.sym)
-		{
-			#ifdef ENABLE_DEBUG
-			case SDLK_1:
-			case SDLK_2:
-			case SDLK_3:
-			case SDLK_4:
-			case SDLK_5:
-			case SDLK_6:
-			case SDLK_7:
-			case SDLK_8:
-			case SDLK_9:
+			case SDL_KEYUP:
+			switch(event.key.keysym.sym)
 			{
-				int tmp = event.key.keysym.sym - SDLK_1 + 1;
-
-				if (event.key.keysym.mod & KMOD_SHIFT)
+				case SDLK_RIGHT:
+				key_right = 0;
+				break;
+	
+				case SDLK_LEFT:
+				key_left = 0;
+				break;
+	
+				case SDLK_UP:
+				key_up = 0;
+				break;
+	
+				case SDLK_DOWN:
+				key_down = 0;
+				break;
+	
+				case SDLK_z:
+				case SDLK_a:
+				key_a = 0;
+				break;
+	
+				case SDLK_x:
+				case SDLK_s:
+				key_b = 0;
+				break;
+	
+				case SDLK_c:
+				case SDLK_d:
+				key_c = 0;
+				break;
+	
+				case SDLK_q:
+				key_a = 0;
+				key_reset_record = 0;
+				break;
+	
+				case SDLK_SPACE:
+				speed_throttle = 0;
+				break;
+	
+				default:
+				/* keep -Wall happy */
+				break;
+			}
+			break;
+	
+	        	case SDL_KEYDOWN:
+			switch(event.key.keysym.sym)
+			{
+				#ifdef ENABLE_DEBUG
+				/* enable/disable sprites */
+				case SDLK_1:
+				case SDLK_2:
+				case SDLK_3:
+				case SDLK_4:
+				case SDLK_5:
+				case SDLK_6:
+				case SDLK_7:
+				case SDLK_8:
+				case SDLK_9:
 				{
-					tmp = tmp + 10;
+					int tmp = event.key.keysym.sym - SDLK_1 + 1;
+	
+					if (event.key.keysym.mod & KMOD_SHIFT)
+					{
+						tmp = tmp + 10;
+					}
+	
+					sprites[tmp].u1 ^= 0x80;
 				}
-
-				sprites[tmp].u1 ^= 0x80;
+				break;
+				#endif
+	
+				case SDLK_ESCAPE:
+				cls.quit = 1;
+				break;
+	
+				case SDLK_RIGHT:
+				key_right = 1;
+				break;
+				
+				case SDLK_LEFT:
+				key_left = 1;
+				break;
+	
+				case SDLK_UP:
+				key_up = 1;
+				break;
+				
+				case SDLK_DOWN:
+				key_down = 1;
+				break;
+	
+				case SDLK_z:
+				case SDLK_a:
+				key_a = 1;
+				break;
+	
+				case SDLK_x:
+				case SDLK_s:
+				key_b = 1;
+				break;
+	
+				case SDLK_c:
+				case SDLK_d:
+				key_c = 1;
+				break;
+	
+				case SDLK_d:
+				debug_flag ^= 1;
+				break;
+	
+				case SDLK_F5:
+				quicksave();
+				break;
+	
+				case SDLK_F7:
+				quickload();
+				break;
+	
+				case SDLK_RETURN:
+				if (event.key.keysym.mod & KMOD_ALT)
+				{
+					toggle_fullscreen();
+				}
+				break;
+	
+				case SDLK_q:
+				key_a = 1;
+				key_reset_record = 1;
+				break;
+	
+				case SDLK_SPACE:
+				speed_throttle = 1;
+				break;
+	
+				default:
+				/* keep -Wall happy */
+				break;
 			}
 			break;
-			#endif
-
-			case SDLK_ESCAPE:
-			quit = 1;
-			break;
-
-			case SDLK_RIGHT:
-			key_right = 1;
-			break;
-			
-			case SDLK_LEFT:
-			key_left = 1;
-			break;
-
-			case SDLK_UP:
-			key_up = 1;
-			break;
-			
-			case SDLK_DOWN:
-			key_down = 1;
-			break;
-
-			case SDLK_z:
-			key_a = 1;
-			break;
-
-			case SDLK_x:
-			key_b = 1;
-			break;
-
-			case SDLK_c:
-			key_c = 1;
-			break;
-
-			case SDLK_d:
-			debug_flag ^= 1;
-			break;
-
-			case SDLK_F5:
-			quicksave();
-			break;
-
-			case SDLK_F7:
-			quickload();
-			break;
-
-			case SDLK_RETURN:
-			if (event.key.keysym.mod & KMOD_ALT)
-			{
-				toggle_fullscreen();
-			}
-			break;
-
-			case SDLK_q:
-			key_a = 1;
-			key_reset_record = 1;
-			break;
-
-			case SDLK_SPACE:
-			speed_throttle = 1;
-			break;
-
-			default:
-			/* keep -Wall happy */
+	
+			case SDL_QUIT:
+			leave_game();
 			break;
 		}
-		break;
-
-		case SDL_QUIT:
-		exit(0);
-		break;
 	}
 }
 
@@ -600,14 +610,16 @@ void rest(int fps)
 	{
 		if (speed_throttle == 1)
 		{
-			/* 5 times faster */
-			fps = fps*5;
+			/* 10 times faster */
+			fps = fps*10;
 		}
 
 		SDL_Delay(1000 / fps);
 	}
 }
 
+/** Initializes all tasks to stopped state
+*/
 void init_tasks()
 {
 	int i;
@@ -625,52 +637,77 @@ void init_tasks()
 	task_pc[0] = 0;
 }
 
-static void play_intro()
+/** Plays several animations at once
+    @param anm        pointer to an array of anm_file_t entries
+    @param n          number of elements in array
+    @param skippable  skip to next animation if key pressed (otherwise breaks)
+    @returns zero on completion of all videos, 1 if skipped, negative on error
+
+    Note that cls.quit might be true; in that case, return value of one will 
+    be returned
+*/
+int play_anm(anm_file_t *anm, int n, int skippable)
 {
-	int stop = 0;
+	int seq;
+	int ret;
 
-	if (stop == 0)
+	ret = 0;
+	for (seq = 0; seq < n; seq++)
 	{
-		play_music_track(31, 0);
-		stop = play_animation("INTRO1.BIN", 0);
-	}
+		if (cls.quit == 0)
+		{
+			int ok;
 
-	if (stop == 0)
-	{
-		play_music_track(32, 0);
-		stop = play_animation("INTRO2.BIN", 0);
-	}
+			play_music_track(anm[seq].track, 0);
+			ok = play_animation(anm[seq].filename, anm[seq].offset);
+			if (ok < 0)
+			{
+				ret = ok;
+				break;
+			}
 
-	if (stop == 0)
-	{
-		play_music_track(33, 0);
-		stop = play_animation("INTRO3.BIN", 0);
-	}
-
-	if (stop == 0)
-	{
-		play_music_track(34, 0);
-		stop = play_animation("INTRO4.BIN", 0);
+			if (ok == 1 && skippable == 0)
+			{
+				ret = 1;
+				break;
+			}
+		}
 	}
 
 	stop_music();
+	return ret;
 }
 
-void run()
+/** Plays the introduction to the game
+
+    Introduction is split into 4 files, since sega-cd was limited with 
+    512 KB of ram, and video is loaded into memory before it can be
+    played. also, each such sequence comes with it's own audio track
+*/
+static void play_intro()
 {
-	/* if no room specified, then follow the original flow:
-	 * first play intro, then jump to code entry script.
-	 */
+	play_anm(anm_files, 4, 0);
+}
+
+/** Main game loop
+
+    This is where all the magic happens!
+*/
+static void run()
+{
+	cls.quit = 0;
 	init_tasks();
 
 	if (next_script == 0)
 	{
+		/* if no room specified, then follow the original flow:
+		 * first play intro, then jump to code entry script.
+		 */
 		play_intro();
 		next_script = 7;
 	}
 
-	quit = 0;
-	while (quit == 0)
+	while (cls.quit == 0)
 	{
 		int i;
 
@@ -695,7 +732,7 @@ void run()
 
 		if (record_flag)
 		{
-			write_keys_to_record();
+			add_keys_to_record();
 		}
 	
 		LOG(("*new frame*\n"));
@@ -722,11 +759,10 @@ void run()
 			new_task_pc[i] = -1;
 		}
 
-		/* call b622 */
 		for (i=0; i<MAX_TASKS; i++)
 		{
 			int pc = task_pc[i];
-			if (pc != -1 && enabled_tasks[i] == 0)
+			if (pc != INVALID_PC && enabled_tasks[i] == 0)
 			{
 				toggle_aux(0);
 				set_aux_bank(i);
@@ -746,65 +782,22 @@ void run()
                 music_update();
 
 		rest(15);
-
-		#if 0
-		/* uncomment this block to enable printouts of modified
-		 * variables (between two frames.)
-		 */
-		toggle_aux(0);
-		for (i=0; i<240; i++)
-		{
-			if (old_var[i] != get_variable(i))
-			{
-				printf("global-var %d changed to 0x%02x\n", i, get_variable(i));
-				old_var[i] = get_variable(i);
-			}
-		}
-
-		toggle_aux(1);
-		for (j=0; j<32; j++)
-		{
-			set_aux_bank(j);
-			for (i=0; i<64; i++)
-			{
-				if (old_var[i+256+(j*64)] != get_variable(i))
-				{
-					printf("tls %d var %d changed to %02x\n", j, i, get_variable(i));
-					old_var[i+256+(j*64)] = get_variable(i);
-				}
-			}
-		}
-
-		toggle_aux(0);
-		#endif
 	}
 }
 
-void animation_test()
+/** Runs the animation-test, enabled with --animation-test
+*/
+static void animation_test()
 {
-	play_music_track(31, 0);
-	play_animation("INTRO1.BIN", 0);
-	play_music_track(32, 0);
-	play_animation("INTRO2.BIN", 0);
-	play_music_track(33, 0);
-	play_animation("INTRO3.BIN", 0);
-	play_music_track(34, 0);
-	play_animation("INTRO4.BIN", 0);
-	play_music_track(35, 0);
-	play_animation("MAKE2MB.BIN", 0x109a);
-	play_music_track(36, 0);
-	play_animation("MID2.BIN", 0);
-	play_music_track(37, 0);
-	play_animation("END1.BIN", 0);
-	play_music_track(38, 0);
-	play_animation("END2.BIN", 0);
-	play_music_track(39, 0);
-	play_animation("END3.BIN", 0);
-	play_music_track(40, 0);
-	play_animation("END4.BIN", 0);
-	stop_music();
+	int files = sizeof(anm_files) / sizeof(anm_files[0]);
+	play_anm(anm_files, files, 1);
 }
 
+/** Runs the sprite-test 
+
+    Interactively show the sprites in this 'room' file. Use the --room
+    parameter to view sprites in other rooms
+*/
 void sprite_test()
 {
 	int redraw;
@@ -813,13 +806,14 @@ void sprite_test()
 
 	sprites[0].index = 0;
 	sprites[0].frame = 0;
+	sprites[0].x = 10;
+	sprites[0].y = 10;
 
-	quit = 0;
+	cls.quit = 0;
 
 	redraw = 1;
 	set_palette(0x11);
-	//FIXME: SDL_SetColors(screen, palette, 0, 256);
-	while (quit == 0)
+	while (cls.quit == 0)
 	{
 		int a4;
 
@@ -889,7 +883,7 @@ void sprite_test()
 		if (get_variable(250))
 		{
 			/* flip */
-			sprites[0].frame |= 0x80;
+			sprites[0].frame ^= 0x80;
 		}
 
 		set_variable(229, 0);
@@ -925,7 +919,7 @@ static struct option options[] =
 	{"sprite-test", no_argument, &test_flag, 1},
 	{"intro-test", no_argument, &test_flag, 2},
 	{"help", no_argument, 0, 'h'},
-	{"no-sound", no_argument, &nosound_flag, 1},
+	{"no-sound", no_argument, 0, 'n'},
 	{"fullscreen", no_argument, &fullscreen_flag, 1},
 	{"record", no_argument, &record_flag, 1},
 	{"replay", no_argument, &replay_flag, 1},
@@ -933,7 +927,8 @@ static struct option options[] =
 	{"triple", no_argument, 0, '3'},
 	{"scale", required_argument, 0, 's'},
 	{"iso", no_argument, 0, 'i'},
-	{"fastest", no_argument, &fastest_flag, 1}
+	{"fastest", no_argument, &fastest_flag, 1},
+	{0, no_argument, 0, 0}
 };
 
 int main(int argc, char **argv)
@@ -941,6 +936,14 @@ int main(int argc, char **argv)
 	int options_index;
 
 	next_script = 0;
+
+	cls.scale = 1;
+	cls.filtered = 0;
+	cls.fullscreen = 0;
+	cls.use_iso = 0;
+	cls.speed_throttle = 0;
+	cls.paused = 0;
+	cls.nosound = 0;
 
 	options_index = 0;
 	while (1)
@@ -968,27 +971,35 @@ int main(int argc, char **argv)
 			return 0;
 
 			case '2':
-			scale = 2;
+			cls.scale = 2;
 			break;
 
 			case '3':
-			scale = 3;
+			cls.scale = 3;
 			break;
 
 			case 's':
-			scale = atoi(optarg);
-			if (scale != 2 && scale != 3)
+			cls.scale = atoi(optarg);
+			if (cls.scale != 2 && cls.scale != 3)
 			{
 				panic("invalid scaler (either 2 or 3)");
 				return 1;
 			}
 
-			filtered_flag = 1;
+			cls.filtered = 1;
 			break;
 
 			case 'i':
-			toggle_use_iso(1);
+			cls.use_iso = 1;
 			break;
+
+			case 'n':
+			cls.nosound = 1;
+			break;
+
+			case '?':
+			/* invalid argument */
+			return 1;
 		}
 	}
 
@@ -1030,6 +1041,7 @@ int main(int argc, char **argv)
 
 	if (record_fp != NULL)
 	{
+		flush_recorded_keys();
 		fclose(record_fp);
 	}
 
