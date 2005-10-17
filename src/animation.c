@@ -1,6 +1,6 @@
 /*
  * Heart of The Alien Redux: Cutscene and deathscene animation player
- * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,17 +28,15 @@
 #include "cd_iso.h"
 #include "render.h"
 #include "common.h"
+#include "client.h"
 
 ///////
-extern int quit;
 void rest(int fps);
 
-extern short variables[256];
 extern SDL_Surface *screen;
-extern unsigned char memory[];
 extern SDL_Color palette[256];
 
-/* used for 4->8 bit convertion */
+/* used for 4->8 bit convertion (140K penalty) */
 static unsigned char dummy[304*192/2];
 static unsigned char screen0[192*304];
 static unsigned char screen2[192*304];
@@ -46,6 +44,7 @@ static unsigned char screen2[192*304];
 static void post_render(int fps)
 {
 	check_events();
+	update_keys();
 	rest(fps);
 }
 
@@ -76,26 +75,26 @@ static void fillline(unsigned char *screen, int offset, int count, int color)
 	}
 }
 
-static void unpack_animation_delta(int a2, char *out)
+static void unpack_animation_delta(int offset, char *out)
 {
 	int a5;
 	char *src;
 	int d0, d2, d3, d5, d6, d7, d1;
 
-	a5 = a2;
+	a5 = offset;
 
-	/* bug in the original code, assumes a2 < 0x100 */
-	d0 = get_word(a2);
-	a2 += 2;
+	/* bug in the original code, assumes offset < 0x100 */
+	d0 = get_word(offset);
+	offset += 2;
 	a5 += d0;
 
 	/*
 	Original game uses:
-	d0 = (d0 & 0xff00) | get_byte(a2);
+	d0 = (d0 & 0xff00) | get_byte(offset);
 	d0 = d0 >> 4;
 	*/
 
-	d0 = get_byte(a2) >> 4;
+	d0 = get_byte(offset) >> 4;
 	*out++ = d0;
 
 	d6 = 0;
@@ -110,11 +109,11 @@ static void unpack_animation_delta(int a2, char *out)
 	loc_d04c:
 	if (d6 != 0)
 	{
-		d2 = get_byte(a2) >> 4;
+		d2 = get_byte(offset) >> 4;
 	}
 	else
 	{
-		d2 = get_byte(a2++) & d7;
+		d2 = get_byte(offset++) & d7;
 	}
 
 	*out++ = d2;
@@ -135,13 +134,13 @@ static void unpack_animation_delta(int a2, char *out)
 
 	if (d6 != 0)
 	{
-		d3 = get_byte(a2++);
+		d3 = get_byte(offset++);
 	}
 	else
 	{
-		d3 = get_byte(a2++) & d7;
+		d3 = get_byte(offset++) & d7;
 		d3 <<= 8;
-		d3 |= get_byte(a2);
+		d3 |= get_byte(offset);
 		d3 >>= 4;
 	}
 
@@ -218,517 +217,295 @@ static void unpack_animation_delta(int a2, char *out)
 	goto loc_d05e;
 }
 
-static void anim_interesting(int a1, int a2, int a3, int d3)
+/** 
+
+    This is probably the most interesting compression ever developed. The
+    color_mask passed represents which colors (out of 16) have changed in
+    this frame; each color is associated with a mask of what types of 
+    brushes were used to draw these colors. Options are delta-horz-line,
+    rectangle, horizontal line, vertical line, set of pixels, 3x3, 4x4
+    and 5x5 patterns.
+*/
+static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 {
 	unsigned char *out;
-	int d1, d2, d4, d5;
+	int d1, d4;
 	int count, offset;
 	int bitmask, color;
 
-	/* d3 = color bitmask */
 	out = screen0;
-	d5 = 0;
 	d1 = 0;
 
-	loc_d2d8:
-	if (d3 & (1 << d5))
+	for (color = 0; color < 16; color++)
 	{
-		goto loc_d2ea;
-	}
-
-	loc_d2dc:
-	d5++;
-	if (d5 != 16)
-	{
-		goto loc_d2d8;
-	}
-
-	return;
-
-	loc_d2ea:
-	d2 = d5 & 0x0f;	/* current color */
-	d2 = (d2 << 8) | d2;
-	color = d2;
-
-	/* each bit is a different drawing pattern, 1x1 etc */
-	bitmask = get_byte(a1++); 
-	if ((bitmask & 1))
-	{
-		/* start drawing a line, and then continue from there
-		 * where each line supplies deltax and delta-count
-		 */
-		loc_d308:
-		offset = get_word(a1);
-		a1 += 2;     	
-		count = get_byte(a1++);
-		if (count == 0xff)
+		if ((color_mask & (1 << color)) == 0)
 		{
-			/* two bytes */
-			count = get_byte(a1++) + 0xff;
+			/* color not used here */
+			continue;
 		}
-	
-		count++;
-		fillline(out, offset, count, d2); 
-	
-		loc_d324:
-		if (get_byte(a2) == 9 && get_byte(a3) == 9)
+		
+		/* each bit is a different drawing pattern, 1x1 etc */
+		bitmask = get_byte(a1++); 
+		if ((bitmask & 1))
 		{
-			a2++;
-			a3++;
-			goto loc_d308;
-		}
-	
-		if (get_byte(a2) == 8 && get_byte(a3) == 8)
-		{
-			a2++;
-			a3++;
-			goto loc_d36e;
-		}
-	
-		offset += 304;
-		d4 = extn(get_byte(a2++));
-		offset += d4;
-		count -= d4;
-		d4 = extn(get_byte(a3++));
-		count += d4;
-
-		fillline(out, offset, count, d2); 
-		goto loc_d324;
-	}
-
-	loc_d36e:
-	if (bitmask & 0x10)
-	{
-		while (1)
-		{
-			/* block */
-			offset = get_byte(a1++);
-			if (offset == 0xff)
-			{
-				break;
-			}
-	
-			offset = (offset << 8) | get_byte(a1++);
-	
-			/* highnibble=width-2, lownibble=height-1 */
+			/* start drawing a line, and then continue from there
+			 * where each line supplies deltax and delta-count
+			 */
+			loc_d308:
+			offset = get_word(a1);
+			a1 += 2;     	
 			count = get_byte(a1++);
-			d4 = count & 0x0f;
-			count = (count >> 4) + 2;
-			d4++;
-
-			LOG(("block offset=%d w=%d h=%d color=%d\n", offset, count, d4, d2));
-
-			loc_d394:
-			fillline(out, offset, count, d2); 
-			offset += 304;
-			d4--;
-			if (d4 >= 0)
+			if (count == 0xff)
 			{
-				goto loc_d394;
+				/* two bytes */
+				count = get_byte(a1++) + 0xff;
 			}
-		}
-	}
-
-	if (bitmask & 0x4)
-	{
-		/* horizontal line */
-		while (1)
-		{
-			offset = get_byte(a1++);
-			if (offset == 0xff)
+		
+			count++;
+			fillline(out, offset, count, color); 
+		
+			loc_d324:
+			if (get_byte(a2) == 9 && get_byte(a3) == 9)
 			{
-				break;
+				a2++;
+				a3++;
+				goto loc_d308;
 			}
-
-			offset = (offset << 8) | get_byte(a1++);
-			count = get_byte(a1++) + 1;
-
-			LOG(("horizontal line offset=%d count=%d\n", offset, count));
-			fillline(out, offset, count, d2); 
-		}
-	}
-
-	if (bitmask & 0x8)
-	{
-		/* d3ce: vertical line */
-		while (1)
-		{
-			offset = get_byte(a1++);
-			if (offset == 0xff)
+		
+			if (get_byte(a2) == 8 && get_byte(a3) == 8)
 			{
-				break;
+				a2++;
+				a3++;
+				goto loc_d36e;
 			}
+		
+			offset += 304; /* next line */
+			d4 = extn(get_byte(a2++));
+			offset += d4;
+			count -= d4;
+			d4 = extn(get_byte(a3++));
+			count += d4;
 	
-			offset = (offset << 8) | get_byte(a1++);
-			count = get_byte(a1++);
-
-			LOG(("vertical line offset=%d count=%d\n", offset, count));
-
-			while (count >= 0)
+			fillline(out, offset, count, color); 
+			goto loc_d324;
+		}
+	
+		loc_d36e:
+		if (bitmask & 0x10)
+		{
+			while (1)
 			{
+				/* block */
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+		
+				offset = (offset << 8) | get_byte(a1++);
+		
+				/* highnibble=width-2, lownibble=height-1 */
+				count = get_byte(a1++);
+				d4 = count & 0x0f;
+				count = (count >> 4) + 2;
+				d4++;
+	
+				LOG(("block offset=%d w=%d h=%d color=%d\n", offset, count, d4, color));
+	
+				do
+				{
+					fillline(out, offset, count, color); 
+					offset += 304;
+					d4--;
+				} while (d4 >= 0);
+			}
+		}
+	
+		if (bitmask & 0x4)
+		{
+			/* horizontal line */
+			while (1)
+			{
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+	
+				offset = (offset << 8) | get_byte(a1++);
+				count = get_byte(a1++) + 1;
+	
+				LOG(("horizontal line offset=%d count=%d\n", offset, count));
+				fillline(out, offset, count, color); 
+			}
+		}
+	
+		if (bitmask & 0x8)
+		{
+			/* vertical line */
+			while (1)
+			{
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+		
+				offset = (offset << 8) | get_byte(a1++);
+				count = get_byte(a1++);
+	
+				LOG(("vertical line offset=%d count=%d\n", offset, count));
+	
+				while (count >= 0)
+				{
+					draw_pixel(out, offset, color);
+					offset = offset + 304;
+					count--;
+				}
+			}
+		}
+	
+		if (bitmask & 0x80)
+		{
+			/* 5x5 pattern (24 bits, center pixel always set) */
+			while (1)
+			{
+				int cnt;
+
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+			
+				offset = (offset << 8) | get_byte(a1++);
+				d4 = get_word(a1) << 8;
+				d4 |= get_byte(a1+2);
+				a1 += 3;
+
+ 				cnt = 0x17;
+				while (cnt >= 0)
+				{
+					if (d4 & (1 << cnt))
+					{
+						draw_pixel(out, offset, color);
+					}
+
+					offset++;
+					if (cnt == 0x0c)
+					{
+						/* center pixel of 5x5 is always set */
+						draw_pixel(out, offset, color);
+						offset++;
+					}
+
+					if (cnt == 0x13 || cnt == 0x0e || cnt == 0x0a || cnt == 0x05)
+					{
+						offset = offset + 299;
+					}
+
+					cnt--;
+				}
+			}
+		}
+	
+		if (bitmask & 0x40)
+		{
+			while (1)
+			{	
+				/* 4x4 pattern (16 bits) */
+				int cnt;
+	
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+			
+				offset = (offset << 8) | get_byte(a1++);
+				d4 = get_word(a1);
+				a1 += 2;
+			
+				cnt = 0x0f;
+				while (cnt >= 0)
+				{
+					if ((d4 & (1 << cnt)))
+					{
+						draw_pixel(out, offset, color);
+					}
+			
+					offset++;
+	
+					if (cnt == 0x0c || cnt == 0x08 || cnt == 0x04)
+					{
+						offset = offset + 300;
+					}
+	
+					cnt--;
+				}
+			}
+		}
+	
+		if (bitmask & 0x20)
+		{
+			while (1)
+			{
+				int cnt;
+
+				/* 3x3 pattern (8 bits, center always set) */
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+			
+				offset = (offset << 8) | get_byte(a1++);
+
+				d4 = get_byte(a1++);
+				
+				cnt = 0x07;
+				while (cnt >= 0)
+				{
+					if ((d4 & (1 << cnt)))
+					{
+						draw_pixel(out, offset, color);
+					}
+			
+					offset++;
+	
+					if (cnt == 0x05 || cnt == 0x03)
+					{
+						offset = offset + 301;
+					}
+
+					if (cnt == 0x04)
+					{
+						draw_pixel(out, offset, color);
+						offset++;
+					}
+
+					cnt--;
+				}
+			}
+		}
+		
+		if ((bitmask & 0x02))
+		{
+			/* collection of pixels */
+			while (1)
+			{
+				offset = get_byte(a1++);
+				if (offset == 0xff)
+				{
+					break;
+				}
+		
+				offset = (offset << 8) | get_byte(a1++);
+	
 				draw_pixel(out, offset, color);
-				offset = offset + 304;
-				count--;
 			}
 		}
 	}
-
-	if (bitmask & 0x80)
-	{
-		while (1)
-		{
-			d1 = get_byte(a1++);
-			if (d1 == 0xff)
-			{
-				break;
-			}
-		
-			d1 <<= 8;
-			d1 |= get_byte(a1++);
-			d4 = get_word(a1) << 8;
-			d4 |= get_byte(a1+2);
-			a1 += 3;
-			if (d4 & (1 << 0x17))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x16)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x15)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x14)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x13)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1 += 300;
-			if ((d4 & (1 << 0x12)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x11)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x10)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0f)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0e)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=300;
-			if ((d4 & (1 << 0x0d)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0c)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			draw_pixel(out, d1, d2);
-		
-			d1++;
-			if ((d4 & (1 << 0x0b)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0a)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=300;
-			if ((d4 & (1 << 0x09)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x08)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x07)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x06)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x05)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=300;
-			if ((d4 & (1 << 0x04)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x03)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x02)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x00)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		}
-	}
-
-	if (bitmask & (1 << 6))
-	{
-		while (1)
-		{		
-			d1 = get_byte(a1++);
-			if (d1 == 0xff)
-			{
-				break;
-			}
-		
-			d1 <<= 8;
-			d1 |= get_byte(a1++);
-			d4 = get_word(a1);
-			a1 += 2;
-		
-			if ((d4 & (1 << 0x0f)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0e)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0d)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0c)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=301;
-			if ((d4 & (1 << 0x0b)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x0a)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x09)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x08)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=301;
-			if ((d4 & (1 << 0x07)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x06)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x05)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x04)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-		
-			d1 += 301;
-			if ((d4 & (1 << 0x03)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x02)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x01)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0x00)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-		}
-	}
-
-	if (bitmask & (1 << 5))
-	{
-		while (1)
-		{
-			d1 = get_byte(a1++);
-			if (d1 == 0xff)
-			{
-				break;
-			}
-		
-			d1 <<= 8;
-			d1 |= get_byte(a1++);
-			d4 = get_byte(a1++);
-		
-			if ((d4 & (1 << 7)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 6)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 5)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=302;
-			if ((d4 & (1 << 4)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			draw_pixel(out, d1, d2);
-			d1++;
-		
-			if ((d4 & (1 << 3)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1+=302;
-			if ((d4 & (1 << 2)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 1)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		
-			d1++;
-			if ((d4 & (1 << 0)))
-			{
-				draw_pixel(out, d1, d2);
-			}
-		}
-	}
-	
-	if ((bitmask & 0x2))
-	{
-		/* collection of pixels */
-		while (1)
-		{
-			offset = get_byte(a1++);
-			if (offset == 0xff)
-			{
-				break;
-			}
-	
-			offset = (offset << 8) | get_byte(a1++);
-
-			draw_pixel(out, offset, d2);
-		}
-	}
-
-	goto loc_d2dc;
 }
 
 void flip_screens(int d0)
@@ -844,14 +621,9 @@ int play_sequence(int offset, int fps)
 	loc_a2_is_0:
 	/* decompress TWO screens */
 	d6 = 2;
-	a2 = get_long(a5);
-	a3 = get_long(a5+4);
-	a5 += 8;
-	decompress_backdrop(screen0, a2, a3);
-	a2 = get_long(a5);
-	a3 = get_long(a5+4);
-	a5 += 8;
-	decompress_backdrop(screen2, a2, a3);	
+	decompress_backdrop(screen0, get_long(a5), get_long(a5+4));
+	decompress_backdrop(screen2, get_long(a5+8), get_long(a5+12));	
+	a5 += 16;
 
 	loc_d15e:
 	d0 = 0;
@@ -873,7 +645,11 @@ int play_sequence(int offset, int fps)
 
 	if (d6 >= 8)
 	{
-		goto loc_d198;
+		d0 = d6;
+		d1 = 5;
+		flip_screens(d0);
+		d6 += 8;
+		goto loc_d1f4;
 	}
 
 	if (get_byte(a1) != 0)
@@ -888,29 +664,23 @@ int play_sequence(int offset, int fps)
 
 	if (d6 == 3 || d6 == 1)
 	{
-		goto loc_d1a4;
+		d0 = 3;
+		d1 = 0;
+		flip_screens(d0);
+		goto loc_d1f4;
 	}
 
 	if (d6 != 0)
 	{
-		goto loc_d198;
+		d0 = d6;
+		d1 = 5;
+		flip_screens(d0);
+		d6 += 8;
+		goto loc_d1f4;
 	}
 
 	loc_d194:
 	d6 = 8;
-	goto loc_d1f4;
-
-	loc_d198:
-	d0 = d6;
-	d1 = 5;
-	flip_screens(d0);
-	d6 += 8;
-	goto loc_d1f4;
-
-	loc_d1a4:
-	d0 = 3;
-	d1 = 0;
-	flip_screens(d0);
 	goto loc_d1f4;
 
 	loc_d1ae:
@@ -920,7 +690,7 @@ int play_sequence(int offset, int fps)
 		goto loc_d1f4;
 	}
 
-	variables[255] = 100;
+	set_variable(255, 100);
 	// a4 = screen0
 	d0 = 0;
 	d1 = 0;
@@ -941,11 +711,11 @@ int play_sequence(int offset, int fps)
 		goto loc_d1d4;
 	}
 
-	variables[255] = 6;
+	set_variable(255, 6);
 	return 0;
 
 	loc_d1f4:
-	if (quit != 0)
+	if (get_variable(250) != 0 || cls.quit)
 	{
 		/* hack, to stop animations */
 		return 1;
@@ -957,6 +727,8 @@ int play_sequence(int offset, int fps)
 	a1 += 2;
 	if (d0 != 0)
 	{
+		unsigned char *ptr;
+
 		a2 += d0;
 		d3 = get_word(a1); /* colors mask used in this frame */
 		d4 = get_word(a1+2); /* offset of something */
@@ -964,10 +736,11 @@ int play_sequence(int offset, int fps)
 
 		/* XXX: move into a local array */
 		a0 = 0xdc000;
-		unpack_animation_delta(a2, &memory[a0]);
+		ptr = get_memory_ptr(a0);
+		unpack_animation_delta(a2, ptr);
 		a2 = a0;
 		a3 = a0 + d4;
-		anim_interesting(a1, a2, a3, d3);
+		anim_interesting(a1, a2, a3, (unsigned short)d3);
 	}
 	
 	/* a4 = screen0 */
@@ -1006,54 +779,62 @@ int play_sequence(int offset, int fps)
 
 	loc_d268:
 	d7++;
+
+#if 0
+	this code was never executed. I wonder why it's even here :)
+
 	if (byte_0_7FF96 == 0)
 	{
 		goto loc_d2ae;
 	}
-	// clr.b   ($C0401).l
+
 	copy_to_screen();
 	post_render(fps);
-	/* LOG(("d268\n")); */
-	// clr.b   ($C0401).l
-	//move.b  #-1,($C0400).l
-	// FIXME: WHY TWICE??
 	copy_to_screen();
 	post_render(fps);
-	//move.b  #-1,($C0400).l
+
 	d0 = 7;
 
-	loc_d29c:
-	copy_to_screen();
-	post_render(fps);
-	d0--;
-	if (d0 >= 0)
+	do
 	{
-		goto loc_d29c;
-	}
+		copy_to_screen();
+		post_render(fps);
+		d0--;
+	} while (d0 >= 0);
 
 	byte_0_7FF96 = 0;
 	goto loc_d160;
 
 	loc_d2ae:
-//seg000:0000D2AE                 clr.b   ($C0401).l
+#endif
+
 	copy_to_screen();
 	post_render(fps);
-	/* LOG(("d2ae\n")); */
-//seg000:0000D2B8                 move.b  #-1,($C0400).l
 	goto loc_d160;
 
 	return 0;
 }
 
-void play_death_animation(int index)
+/** Plays a death sequence
+    @param index    animation index in resources
+
+    Death animations are stored as resources in the room file itself,
+    along with the rest of the level
+*/
+int play_death_animation(int index)
 {
 	unsigned long offset;
 
 	/* set palette 2 ? */
 	offset = 0xf910 + (index << 2);
-	play_sequence(get_long(offset), 15);
+	return play_sequence(get_long(offset), 15);
 }
 
+/** Plays an animation file
+    @param filename    name as appears on cd
+    @param fileoffset  offset in bytes where to start reading from
+    @returns zero if played completely, 1 if aborted, negative on error
+*/
 int play_animation(const char *filename, int fileoffset)
 {
 	int pattern;
@@ -1065,11 +846,14 @@ int play_animation(const char *filename, int fileoffset)
 	int fps_;
 	int read_offset;
 	int stop;
+	unsigned char *ptr;
 
 	LOG(("playing animation %s\n", filename));
 
+	/* animations are loaded into a fixed place in 68000 memory */
 	read_offset = 0x809a - fileoffset;
-	if (read_file(filename, memory + read_offset) < 0)
+	ptr = get_memory_ptr(read_offset);
+	if (read_file(filename, ptr) < 0)
 	{
 		LOG(("play_animation: unable to read %s\n", filename));
 		return -1;
@@ -1082,6 +866,8 @@ int play_animation(const char *filename, int fileoffset)
 	stop = 0;
 	while (stop == 0)
 	{
+		unsigned char *ptr;
+
 		fps_ = 10;
 
 		scene = get_byte(pattern_offset + pattern);
@@ -1093,7 +879,8 @@ int play_animation(const char *filename, int fileoffset)
 		}
 
 		palette_offset = get_long(0x809a) + (scene << 5);
-		set_palette_rgb12(&memory[palette_offset]);
+		ptr = get_memory_ptr(palette_offset);
+		set_palette_rgb12(ptr);
 
 		scene_offset = get_long(0x80a6 + (scene << 2));
 		stop = play_sequence(scene_offset, fps_);
@@ -1107,7 +894,9 @@ int play_animation(const char *filename, int fileoffset)
 
 	}
 
-	quit = 0;
+	/* just in case, clean variable 250 (key_a pressed) */
+	set_variable(250, 0);
+
 	LOG(("leaving animation player\n"));
 	return stop;
 }
