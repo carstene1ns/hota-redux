@@ -24,6 +24,7 @@
 
 int extn(unsigned char n)
 {
+	assert(n < 0x10);
 	if (n & 0x08)
 	{
 		int x = -16;
