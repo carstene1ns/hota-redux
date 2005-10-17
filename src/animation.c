@@ -545,7 +545,6 @@ int play_sequence(int offset, int fps)
 {
 	int d0, d1, d3, d4, d6, d7;
 	int a0, a1, a2, a3, a4, a5;
-	int byte_0_7FF96 = 0;
 
 	/* This code is obscure. I have no idea why it's written this way,
 	 * or how the hell it works, but .. it just works!.
