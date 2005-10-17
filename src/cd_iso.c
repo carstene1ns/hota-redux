@@ -1,6 +1,6 @@
 /*
  * Heart of The Alien: ISO handling
- * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,16 +16,16 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-
+#include <SDL.h>
 #include <stdio.h>
 #include <string.h>
 #include "debug.h"
+#include "client.h"
 #include "cd_iso.h"
 
 static char *ISO_FILENAME = "Heart Of The Alien (U).iso";
-static int use_iso = 0;
 
-typedef struct file_offset_t 
+typedef struct file_offset_s
 {
 	char *filename;
 	int offset;
@@ -54,18 +54,6 @@ static file_offset_t file_offsets[] =
 	{"ROOMS7.BIN", 0x3eb000, 0x2743a},
 	{"ROOMS8.BIN", 0x870000, 0x5a800}
 };
-
-int toggle_use_iso(int toggle)
-{
-	int old_toggle = use_iso;
-	use_iso = toggle;
-	return old_toggle;
-}
-
-int get_iso_toggle()
-{
-	return use_iso;
-}
 
 static int get_file_offset(const char *filename, int *offset, int *size)
 {
@@ -121,7 +109,7 @@ int read_file(const char *filename, void *out)
 		return -1;
 	}
 
-	if (use_iso)
+	if (cls.use_iso)
 	{
 		strcpy(archive, ISO_FILENAME);
 	}
