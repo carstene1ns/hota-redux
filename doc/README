@@ -1,5 +1,5 @@
 Heart of The Alien Redux
-2004 (c) Gil Megidish (gil at megidish dot net)
+2004-2005 (c) Gil Megidish (gil at megidish dot net)
 
 Thank you for downloading Heart of The Alien Redux! 
 This rewrite brings the wonderful game to modern computers and consoles. 
@@ -36,9 +36,9 @@ KEYS
         To control your character, you may use either set of cursor keys.
         Moreover, here are extra keys available:
 
-        Z                      shoot, keep down in order to run
-        X                      use your whip
-        C                      jump
+        Z/A                    shoot, keep down in order to run
+        X/S                    use your whip
+        C/D                    jump
         F5                     quicksave (1 slot)
         F7                     quickload
         ESC                    leave game, or skip animation

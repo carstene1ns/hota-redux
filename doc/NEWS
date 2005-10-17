@@ -1,8 +1,17 @@
+1.2.4
+  - Added: joystick support
+  - Fixed: was polling one event at a time
+  - Fixed: action keys break animation (instead of esc)
+  - Fixed: better timing
+  - Fixed: crash at getopt when parsing invalid command line (getopt)
+  - Added: support for A,S,D keys (German keyboards :)
+  - Lots of code cleanups
+
 1.2.2
-  - Added scaler2x effect
-  - Added scaler3x effect
-  - Added simple x3 scaler
-  - Fixed sound effects
+  - Added: scaler2x effect
+  - Added: scaler3x effect
+  - Added: simple x3 scaler
+  - Fixed: sound effects
   - Major code cleanups
 
 1.2.0
