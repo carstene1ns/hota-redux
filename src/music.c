@@ -20,21 +20,22 @@
 #include <SDL_mixer.h>
 #include "debug.h"
 #include "music.h"
-
-///
-extern int nosound_flag;
-/////
+#include "cd_iso.h"
+#include "client.h"
 
 static SDL_CD *sdl_cd;
 static Mix_Music *current_track;
 
-/* stop cd player */
+/** (The Underdogs version of) Heart of The Alien's tracks are formatted like this */
+#define ISO_PREFIX "Heart Of The Alien (U) "
+
+/** Stops cd player */
 static void stop_music_cd()
 {
 	SDL_CDStop(sdl_cd);
 }
 
-/* stop mp3 player */
+/** Stops mp3 player */
 static void stop_music_mp3()
 {
 	if (current_track != NULL)
@@ -44,28 +45,22 @@ static void stop_music_mp3()
 	}
 }
 
-/* stop music */
+/** Stops music */
 void stop_music()
 {
-	if (nosound_flag)
+	if (cls.nosound == 0)
 	{
-		return;
-	}
-
-	if (get_iso_toggle())
-	{
-		stop_music_mp3();	
-	}
-	else
-	{
-		stop_music_cd();
+		cls.use_iso ? stop_music_mp3() : stop_music_cd();
 	}
 }
 
-/* play a single track from cd */
+/** Plays a single track from cd 
+    @param track   track to play
+    @param loop    loop count (not supported yet)
+*/
 static void play_music_track_cd(int track, int loop)
 {
-	LOG(("play_music_track_cd(track=%d, loop=%d, sdlcd=0x%x)\n", track, loop, sdl_cd));
+	LOG(("play_music_track_cd(track=%d, loop=%d, sdlcd=0x%x)\n", track, loop, (unsigned)sdl_cd));
 
 	if (CD_INDRIVE(SDL_CDStatus(sdl_cd)))
 	{
@@ -78,56 +73,50 @@ static void play_music_track_cd(int track, int loop)
 	}
 }
 
-/* play an mp3 in background */
+/** Plays an mp3 in background 
+    @param track    track to play (appended to PREFIX)
+*/
 static void play_music_track_mp3(int track, int loop)
 {
 	char filename[256];
 
 	stop_music_mp3();
 
-	sprintf(filename, "Heart Of The Alien (U) %02d.mp3", track + 1);
+	sprintf(filename, ISO_PREFIX "%02d.mp3", track + 1);
 	LOG(("playing mp3 %s\n", filename));
 
 	current_track = Mix_LoadMUS(filename);
 	Mix_PlayMusic(current_track, loop);
 }
 
-/* play audio track */
+/** Plays audio track */
+    @param track   track to play
+    @param loop    loop count
+*/
 void play_music_track(int track, int loop)
 {
-	if (nosound_flag)
+	if (cls.nosound == 0)
 	{
-		return;
-	}
+		stop_music();
 
-	stop_music();
-
-	if (get_iso_toggle())
-	{
-		play_music_track_mp3(track, loop);
-	}
-	else
-	{
-		play_music_track_cd(track, loop);
+		cls.use_iso ? play_music_track_mp3(track, loop) : play_music_track_cd(track, loop);
 	}
 }
 
-/* callback after a frame has been rendered */
+/** Callback after a frame has been rendered */
 void music_update()
 {
 }
 
-/* module initializer */
+/** Module initializer */
 void music_init()
 {
-	if (nosound_flag)
+	if (cls.nosound == 0)
 	{
-		return;
-	}
-
-	if (get_iso_toggle() == 0)
-	{
-		/* initialize SDL CDROM, for playing audio tracks */
-		sdl_cd = SDL_CDOpen(0);
+		if (cls.use_iso == 0)
+		{
+			/* initialize SDL CDROM, for playing audio tracks */
+			sdl_cd = SDL_CDOpen(0);
+		}
 	}
 }
