@@ -27,8 +27,7 @@
 #include "sound.h"
 #include "common.h"
 #include "vm.h"
-
-extern int nosound_flag;
+#include "client.h"
 
 /* cached samples, useless convertions and allocations hurt my eyes! */
 static Mix_Chunk *cached_samples[256];
@@ -63,7 +62,7 @@ void play_sample(int index, int volume, int channel)
 	SDL_AudioCVT cvt;
 	Mix_Chunk *chunk;
 
-	if (nosound_flag)
+	if (cls.nosound)
 	{
 		/* day off! */
 		return;

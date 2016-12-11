@@ -400,8 +400,6 @@ void render_sprite(int list_entry)
 	x = extl(sprites[list_entry].x);
 	y = extl(sprites[list_entry].y);
 
-	d3 = y*304 + x;
-
 	d2 = sprites[list_entry].frame & 0x7f;
 	d1 = get_word(a3 + d2*2 + 6);
 	a2 = a3 + d1 + 4;

@@ -35,6 +35,7 @@ void rest(int fps);
 
 extern SDL_Surface *screen;
 extern SDL_Color palette[256];
+extern void update_keys();
 
 /* used for 4->8 bit convertion (140K penalty) */
 static unsigned char dummy[304*192/2];

@@ -89,7 +89,7 @@ static void play_music_track_mp3(int track, int loop)
 	Mix_PlayMusic(current_track, loop);
 }
 
-/** Plays audio track */
+/** Plays audio track
     @param track   track to play
     @param loop    loop count
 */

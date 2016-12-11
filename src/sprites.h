@@ -56,6 +56,7 @@ void mirror_sprite(int sprite);
 void unmirror_sprite(int sprite);
 void remove_sprite(int var);
 void render_sprite(int list_entry);
+void draw_sprites();
 
 int quickload_sprites(FILE *fp);
 int quicksave_sprites(FILE *fp);
