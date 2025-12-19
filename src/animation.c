@@ -31,6 +31,7 @@
 #include "client.h"
 
 ///////
+void check_events();
 void rest(int fps);
 
 extern SDL_Surface *screen;
@@ -76,7 +77,7 @@ static void fillline(unsigned char *screen, int offset, int count, int color)
 	}
 }
 
-static void unpack_animation_delta(int offset, char *out)
+static void unpack_animation_delta(int offset, unsigned char *out)
 {
 	int a5;
 	char *src;
