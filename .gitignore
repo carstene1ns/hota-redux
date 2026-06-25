@@ -1,5 +1,21 @@
 # objects
 *.o
+
 # executable
 alien
 
+# save game
+quicksave
+
+# game data
+*.iso
+*.cue
+*.bin
+
+*.BIN
+*.MAC
+*.MAT
+*.SND
+
+*.ogg
+*.mp3
