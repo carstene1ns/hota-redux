@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <SDL3/SDL.h>
 #include <SDL3_mixer/SDL_mixer.h>
+#include "parg.h"
 
 #include "client.h"
 #include "vm.h"
@@ -37,7 +38,6 @@
 #include "sprites.h"
 #include "game2bin.h"
 #include "animation.h"
-#include "getopt.h"
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
@@ -906,7 +906,7 @@ void sprite_test()
 
 static void help()
 {
-	printf("Heart of The Alien Redux %s", HOTA_VERSION);
+	printf("Heart of The Alien Redux %s\n", HOTA_VERSION);
 	puts("USAGE:");
 	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
@@ -923,29 +923,28 @@ static void help()
 	puts("\t--help         this help");
 }
 
-static struct option options[] =
+static struct parg_option options[] =
 {
-	{"debug", no_argument, 0, 'd'},
-	{"room", required_argument, 0, 'r'}, 
-	{"sprite-test", no_argument, &test_flag, 1},
-	{"intro-test", no_argument, &test_flag, 2},
-	{"help", no_argument, 0, 'h'},
-	{"no-sound", no_argument, 0, 'n'},
-	{"fullscreen", no_argument, &fullscreen_flag, 1},
-	{"record", no_argument, &record_flag, 1},
-	{"replay", no_argument, &replay_flag, 1},
-	{"scale", required_argument, 0, 's'},
-	{"filter", no_argument, 0, 'f'},
-	{"fastest", no_argument, &fastest_flag, 1},
-	{0, no_argument, 0, 0}
+	{"debug", PARG_NOARG, &debug_flag, 1},
+	{"room", PARG_REQARG, NULL, 'r'}, 
+	{"sprite-test", PARG_NOARG, &test_flag, 1},
+	{"intro-test", PARG_NOARG, &test_flag, 2},
+	{"help", PARG_NOARG, NULL, 'h'},
+	{"no-sound", PARG_NOARG, NULL, 'n'},
+	{"fullscreen", PARG_NOARG, &fullscreen_flag, 1},
+	{"record", PARG_NOARG, &record_flag, 1},
+	{"replay", PARG_NOARG, &replay_flag, 1},
+	{"scale", PARG_REQARG, NULL, 's'},
+	{"filter", PARG_NOARG, NULL, 'f'},
+	{"fastest", PARG_NOARG, &fastest_flag, 1},
+	{0, 0, 0, 0}
 };
 
 int main(int argc, char **argv)
 {
-	int options_index;
-
 	next_script = 0;
 
+	// set default options
 	cls.scale = 1;
 	cls.filtered = 0;
 	cls.fullscreen = 0;
@@ -953,25 +952,16 @@ int main(int argc, char **argv)
 	cls.paused = 0;
 	cls.nosound = 0;
 
-	options_index = 0;
-	while (1)
+	// parse CLI options
+	struct parg_state ps;
+	parg_init(&ps);
+	int c;
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:f", options, NULL)) != -1)
 	{
-		int c = getopt_long(argc, argv, "hdr:ns:f", options, &options_index);
-		if (c == -1)
-		{
-			/* no more options */
-			break;
-		}            
-
 		switch(c)
 		{
-			/* won't do a thing if turned on without ENABLE_DEBUG */
-			case 'd':
-			debug_flag = 1;
-			break;
-
 			case 'r':
-			next_script = atoi(optarg);
+			next_script = atoi(ps.optarg);
 			break;
 
 			case 'h':
@@ -979,7 +969,7 @@ int main(int argc, char **argv)
 			return 0;
 
 			case 's':
-			cls.scale = atoi(optarg);
+			cls.scale = atoi(ps.optarg);
 			if (cls.scale < 2)
 			{
 				panic("invalid scale factor");
@@ -996,7 +986,7 @@ int main(int argc, char **argv)
 			break;
 
 			case '?':
-			/* invalid argument */
+			panic("invalid argument");
 			return 1;
 		}
 	}

@@ -30,8 +30,8 @@ add_executable(alien
 	src/debug.c src/debug.h
 	src/decode.c src/decode.h
 	src/game2bin.c src/game2bin.h
-	src/getopt.c src/getopt.h src/getopt1.c
 	src/lzss.c src/lzss.h
+	src/parg.c src/parg.h
 	src/render.c src/render.h
 	src/rooms.c src/rooms.h
 	src/screen.c src/screen.h
