@@ -1,8 +1,6 @@
-# objects
-*.o
-
-# executable
-alien
+# build
+/build/
+/build-*/
 
 # save game
 quicksave

@@ -39,8 +39,6 @@
 #include "animation.h"
 #include "getopt.h"
 
-static char *VERSION = "2.0.0";
-
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
 
@@ -908,14 +906,12 @@ void sprite_test()
 
 static void help()
 {
-	printf("Heart of The Alien Redux %s", VERSION);
+	printf("Heart of The Alien Redux %s", HOTA_VERSION);
 	puts("USAGE:");
 	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
 	#endif
-	puts("\t--double       double size window (608 x 384)");
-	puts("\t--triple       triple size window (912 x 576)");
-	puts("\t--scale=[x]    rescale by factor x");
+	puts("\t--scale x      rescale by factor x");
 	puts("\t--filter       use bilinear filter");
 	puts("\t--fullscreen   start in fullscreen");
 	puts("\t--room n       start from a different room");
