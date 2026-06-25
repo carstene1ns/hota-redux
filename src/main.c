@@ -21,15 +21,14 @@
 #include <string.h>
 #include <memory.h>
 #include <assert.h>
-#include <SDL.h>
-#include <SDL_mixer.h>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
 
 #include "client.h"
 #include "vm.h"
 #include "rooms.h"
 #include "debug.h"
-#include "sound.h"
-#include "music.h"
+#include "audio.h"
 #include "common.h"
 #include "cd_iso.h"
 #include "decode.h"
@@ -40,7 +39,7 @@
 #include "animation.h"
 #include "getopt.h"
 
-static char *VERSION = "1.2.2";
+static char *VERSION = "2.0.0";
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
@@ -73,7 +72,6 @@ int next_script;
 int current_backdrop;
 int current_room;
 
-int filtered_flag = 0;
 int speed_throttle = 0;
 
 int debug_flag = 0;
@@ -99,8 +97,6 @@ static unsigned char cached_recorded_keys[RECORDED_KEYS_CACHE];
 
 /** file descriptor where keys are written to, or read from */
 FILE *record_fp = 0;
-
-SDL_Surface *screen;
 
 /** scratchpad used for unpacking code */
 static unsigned char scratchpad[29184];
@@ -137,24 +133,18 @@ static int load_room(int index)
 */
 static void atexit_callback(void)
 {
-	stop_music();
+	audio_done();
 	SDL_Quit();
 }
 
 static int initialize()
 {
-	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_CDROM|SDL_INIT_AUDIO);
+	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO);
 	atexit(atexit_callback);
 
 	if (cls.nosound == 0)
 	{
-		if (Mix_OpenAudio(44100, AUDIO_S16, 2, 4096) < 0) 
-		{
-			panic("Mix_OpenAudio failed\n");
-		}
-
-		music_init();
-		sound_init();
+		audio_init();
 	}
 
 	if (render_init() < 0)
@@ -456,8 +446,8 @@ void check_events()
 	{
 	        switch (event.type) 
 		{
-			case SDL_KEYUP:
-			switch(event.key.keysym.sym)
+			case SDL_EVENT_KEY_UP:
+			switch(event.key.key)
 			{
 				case SDLK_RIGHT:
 				key_right = 0;
@@ -475,22 +465,22 @@ void check_events()
 				key_down = 0;
 				break;
 	
-				case SDLK_z:
-				case SDLK_a:
+				case SDLK_Z:
+				case SDLK_A:
 				key_a = 0;
 				break;
 	
-				case SDLK_x:
-				case SDLK_s:
+				case SDLK_X:
+				case SDLK_S:
 				key_b = 0;
 				break;
 	
-				case SDLK_c:
-				case SDLK_d:
+				case SDLK_C:
+				case SDLK_D:
 				key_c = 0;
 				break;
 	
-				case SDLK_q:
+				case SDLK_Q:
 				key_a = 0;
 				key_reset_record = 0;
 				break;
@@ -505,8 +495,8 @@ void check_events()
 			}
 			break;
 	
-	        	case SDL_KEYDOWN:
-			switch(event.key.keysym.sym)
+	        	case SDL_EVENT_KEY_DOWN:
+			switch(event.key.key)
 			{
 				#ifdef ENABLE_DEBUG
 				/* enable/disable sprites */
@@ -520,9 +510,9 @@ void check_events()
 				case SDLK_8:
 				case SDLK_9:
 				{
-					int tmp = event.key.keysym.sym - SDLK_1 + 1;
+					int tmp = event.key.key - SDLK_1 + 1;
 	
-					if (event.key.keysym.mod & KMOD_SHIFT)
+					if (event.key.mod & SDL_KMOD_SHIFT)
 					{
 						tmp = tmp + 10;
 					}
@@ -552,23 +542,23 @@ void check_events()
 				key_down = 1;
 				break;
 	
-				case SDLK_z:
-				case SDLK_a:
+				case SDLK_Z:
+				case SDLK_A:
 				key_a = 1;
 				break;
 	
-				case SDLK_x:
-				case SDLK_s:
+				case SDLK_X:
+				case SDLK_S:
 				key_b = 1;
 				break;
 	
-				case SDLK_c:
-				case SDLK_d:
+				case SDLK_C:
+				case SDLK_D:
 				key_c = 1;
 				break;
 	
 				#ifdef ENABLE_DEBUG
-				case SDLK_g:
+				case SDLK_G:
 				debug_flag ^= 1;
 				break;
 				#endif
@@ -582,13 +572,13 @@ void check_events()
 				break;
 	
 				case SDLK_RETURN:
-				if (event.key.keysym.mod & KMOD_ALT)
+				if (event.key.mod & SDL_KMOD_ALT)
 				{
 					toggle_fullscreen();
 				}
 				break;
 	
-				case SDLK_q:
+				case SDLK_Q:
 				key_a = 1;
 				key_reset_record = 1;
 				break;
@@ -603,7 +593,7 @@ void check_events()
 			}
 			break;
 	
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 			leave_game();
 			break;
 		}
@@ -803,8 +793,7 @@ static void run()
 			}
 		}
 
-		SDL_UpdateRect(screen, 0, 0, 0, 0);
-                music_update();
+		music_update();
 
 		rest(12);
 	}
@@ -858,7 +847,6 @@ void sprite_test()
 
 			render_sprite(0);
 			render(background);
-			SDL_UpdateRect(screen, 0, 0, 0, 0);
 			redraw = 0;
 			print_sprite(0);
 		}
@@ -925,10 +913,10 @@ static void help()
 	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
 	#endif
-	puts("\t--iso          use iso and mp3s (in current directory)");
 	puts("\t--double       double size window (608 x 384)");
 	puts("\t--triple       triple size window (912 x 576)");
-	puts("\t--scale=[2|3]  rescale using scale2x or scale3x filters");
+	puts("\t--scale=[x]    rescale by factor x");
+	puts("\t--filter       use bilinear filter");
 	puts("\t--fullscreen   start in fullscreen");
 	puts("\t--room n       start from a different room");
 	puts("\t--sprite-test  run sprite test (use with room)");
@@ -950,10 +938,8 @@ static struct option options[] =
 	{"fullscreen", no_argument, &fullscreen_flag, 1},
 	{"record", no_argument, &record_flag, 1},
 	{"replay", no_argument, &replay_flag, 1},
-	{"double", no_argument, 0, '2'},
-	{"triple", no_argument, 0, '3'},
 	{"scale", required_argument, 0, 's'},
-	{"iso", no_argument, 0, 'i'},
+	{"filter", no_argument, 0, 'f'},
 	{"fastest", no_argument, &fastest_flag, 1},
 	{0, no_argument, 0, 0}
 };
@@ -967,7 +953,6 @@ int main(int argc, char **argv)
 	cls.scale = 1;
 	cls.filtered = 0;
 	cls.fullscreen = 0;
-	cls.use_iso = 0;
 	cls.speed_throttle = 0;
 	cls.paused = 0;
 	cls.nosound = 0;
@@ -975,7 +960,7 @@ int main(int argc, char **argv)
 	options_index = 0;
 	while (1)
 	{
-		int c = getopt_long(argc, argv, "hdr:23s:", options, &options_index);
+		int c = getopt_long(argc, argv, "hdr:ns:f", options, &options_index);
 		if (c == -1)
 		{
 			/* no more options */
@@ -997,27 +982,17 @@ int main(int argc, char **argv)
 			help();
 			return 0;
 
-			case '2':
-			cls.scale = 2;
-			break;
-
-			case '3':
-			cls.scale = 3;
-			break;
-
 			case 's':
 			cls.scale = atoi(optarg);
-			if (cls.scale != 2 && cls.scale != 3)
+			if (cls.scale < 2)
 			{
-				panic("invalid scaler (either 2 or 3)");
+				panic("invalid scale factor");
 				return 1;
 			}
-
-			cls.filtered = 1;
 			break;
 
-			case 'i':
-			cls.use_iso = 1;
+			case 'f':
+			cls.filtered = 1;
 			break;
 
 			case 'n':

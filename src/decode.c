@@ -17,12 +17,10 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 #include <assert.h>
-#include <SDL.h>
 
 #include "vm.h"
-#include "music.h"
+#include "audio.h"
 #include "debug.h"
-#include "sound.h"
 #include "common.h"
 #include "decode.h"
 #include "render.h"

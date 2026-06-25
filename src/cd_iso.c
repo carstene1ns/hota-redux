@@ -16,7 +16,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#include <SDL.h>
 #include <stdio.h>
 #include <string.h>
 #include "debug.h"
@@ -109,26 +108,7 @@ int read_file(const char *filename, void *out)
 		return -1;
 	}
 
-	if (cls.use_iso)
-	{
-		strcpy(archive, ISO_FILENAME);
-	}
-	else
-	{
-		const char *cdname = SDL_CDName(0);
-
-		if (cdname != NULL)
-		{
-			strcpy(archive, cdname);
-			strcat(archive, filename);
-		}
-		else
-		{
-			strcpy(archive, filename);
-		}
-
-		offset = 0;
-	}
+	strcpy(archive, ISO_FILENAME);
 
 	return read_file_internal(archive, size, offset, out);
 }

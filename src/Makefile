@@ -1,17 +1,15 @@
 all: alien
 
 CC=gcc
-SDL_CFLAGS = `sdl-config --cflags`
-SDL_LIBS = `sdl-config --libs`
-SMPEG_CFLAGS = `smpeg-config --cflags`
-SMPEG_LIBS = `smpeg-config --libs`
-CFLAGS=-ggdb -DENABLE_DEBUG -Wall $(SDL_CFLAGS) $(SMPEG_CFLAGS)
+SDL_CFLAGS = `pkg-config --cflags sdl3 sdl3-mixer`
+SDL_LIBS = `pkg-config --libs sdl3 sdl3-mixer`
+CFLAGS=-ggdb -DENABLE_DEBUG -Wall $(SDL_CFLAGS)
 OBJS=\
 	client.o common.o vm.o      sprites.o decode.o   animation.o   \
-	rooms.o  render.o main.o    music.o   debug.o    lzss.o        \
-	sound.o  screen.o scale2x.o scale3x.o game2bin.o cd_iso.o
+	rooms.o  render.o main.o    audio.o   debug.o    lzss.o        \
+	screen.o game2bin.o cd_iso.o
 
-LIBS=$(SDL_LIBS) $(SMPEG_LIBS) -lSDL_mixer
+LIBS=$(SDL_LIBS)
 
 alien: $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS)
@@ -21,4 +19,3 @@ alien: $(OBJS)
 
 clean:
 	@rm -f $(OBJS) alien
-

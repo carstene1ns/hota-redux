@@ -1,5 +1,5 @@
 /*
- * Heart of The Alien: SFX handling
+ * Heart of The Alien: Music/SFX handling
  * Copyright (c) 2004-2005 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
@@ -16,16 +16,16 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef __SOUND_INCLUDED__
-#define __SOUND_INCLUDED__
+#ifndef __AUDIO_INCLUDED__
+#define __AUDIO_INCLUDED__
 
-/** Initialize sound module
+/** Initialize audio module
     @returns zero on success, negative value on error
 */
-int sound_init();
+int audio_init();
 
 /** callback when game script has been unloaded */
-void sound_done();
+void audio_done();
 
 /** Purges all cached sound effects from memory
 
@@ -39,10 +39,20 @@ void sound_flush_cache();
     @param channel   mixing channel [0 .. 3]
 
     Samples on sega-cd are 8000 hz, 8bit signed. each sample is
-    converted to native format before being mixed. since it is quite
-    an overkill to convert every time, converted samples are stored
-    in cache until purged manually.
+    converted to native format before being mixed.
 */
 void play_sample(int index, int volume, int channel);
+
+/** Stops music */
+void stop_music();
+
+/** Callback after a frame has been rendered */
+void music_update();
+
+/** Plays audio track
+    @param track   track to play
+    @param loop    loop count
+*/
+void play_music_track(int track, int loop);
 
 #endif

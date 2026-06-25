@@ -25,7 +25,6 @@ typedef struct
 	int quit;
 
 	int scale;
-	int use_iso;
 	int nosound;
 	int fullscreen;
 	int speed_throttle;
