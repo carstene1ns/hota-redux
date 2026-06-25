@@ -308,6 +308,7 @@ void remove_sprite(int var)
 
 	sprites[entry].next = sprites[to_remove].next;
 	sprites[to_remove].next = last_sprite;
+	last_sprite = to_remove;
 	sprite_count--;
 }
 
@@ -381,7 +382,7 @@ int quicksave_sprites(FILE *fp)
 */
 void render_sprite(int list_entry)
 {
-	unsigned long d0, d1, d2, d3, d4, d6;
+	unsigned long d1, d2, d4, d6;
 	int d7;
 	int offset;
 	int color;
@@ -396,7 +397,7 @@ void render_sprite(int list_entry)
 	a3 = get_long(0xf904) + (d2 << 2);
 	a3 = get_long(a3);
 
-	d0 = d1 = d2 = 0;
+	d1 = d2 = 0;
 	x = extl(sprites[list_entry].x);
 	y = extl(sprites[list_entry].y);
 

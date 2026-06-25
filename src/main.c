@@ -91,6 +91,8 @@ short new_enabled_tasks[64];
 static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
 static int key_reset_record;
 
+static unsigned int last_tick = 0, last_tick_fp = 0;
+
 #define RECORDED_KEYS_CACHE 4096
 static int cached_keys_offset = 0;
 static unsigned char cached_recorded_keys[RECORDED_KEYS_CACHE];
@@ -339,6 +341,7 @@ void quickload()
 	if (fp == NULL)
 	{
 		perror("failed to load 'quicksave' file\n");
+		return;
 	}
 
 	current_room = fgetc(fp);
@@ -396,6 +399,7 @@ void quicksave()
 	if (fp == NULL)
 	{
 		perror("failed to create 'quicksave' file\n");
+		return;
 	}
 
 	fputc(current_room, fp);
@@ -610,13 +614,30 @@ void rest(int fps)
 {
 	if (fastest_flag == 0)
 	{
+		// only set reference
+		if (fps == 0)
+		{
+			last_tick = SDL_GetTicks();
+			last_tick_fp = 0;
+			return;
+		}
+
 		if (speed_throttle == 1)
 		{
 			/* 10 times faster */
 			fps = fps*10;
 		}
 
-		SDL_Delay(1000 / fps);
+		unsigned int diff = ((1000 << 16) / fps) + last_tick_fp;
+		last_tick_fp = diff & 0xffff;
+		diff = diff >> 16;
+		unsigned int current_tick = SDL_GetTicks();
+		while (current_tick - last_tick < diff)
+		{
+			SDL_Delay(1);
+			current_tick = SDL_GetTicks();
+		}
+		last_tick += diff;
 	}
 }
 
@@ -709,6 +730,8 @@ static void run()
 		next_script = 7;
 	}
 
+	rest(0);
+
 	while (cls.quit == 0)
 	{
 		int i;
@@ -783,7 +806,7 @@ static void run()
 		SDL_UpdateRect(screen, 0, 0, 0, 0);
                 music_update();
 
-		rest(15);
+		rest(12);
 	}
 }
 
@@ -815,6 +838,8 @@ void sprite_test()
 
 	redraw = 1;
 	set_palette(0x11);
+	rest(0);
+
 	while (cls.quit == 0)
 	{
 		int a4;
@@ -839,7 +864,7 @@ void sprite_test()
 		}
 
 		check_events();
-		rest(15);
+		rest(12);
 
 		update_keys();
 
@@ -897,7 +922,7 @@ static void help()
 {
 	printf("Heart of The Alien Redux %s", VERSION);
 	puts("USAGE:");
-	#ifdef DEBUG_ENABLED
+	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
 	#endif
 	puts("\t--iso          use iso and mp3s (in current directory)");

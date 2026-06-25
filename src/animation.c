@@ -34,14 +34,14 @@
 void check_events();
 void rest(int fps);
 
-extern SDL_Surface *screen;
-extern SDL_Color palette[256];
 extern void update_keys();
 
-/* used for 4->8 bit convertion (140K penalty) */
+/* used for 4->8 bit conversion */
 static unsigned char dummy[304*192/2];
-static unsigned char screen0[192*304];
-static unsigned char screen2[192*304];
+static unsigned char screenX[(1+192)*304*2];
+static unsigned char *screen0 = screenX + 1*304;
+static unsigned char *screen2 = screenX + (192+1)*304;
+static unsigned char screen4[192*304];
 
 static void post_render(int fps)
 {
@@ -50,11 +50,9 @@ static void post_render(int fps)
 	rest(fps);
 }
 
-static void copy_to_screen()
+static void copy_to_screen(int a4)
 {
-	set_scroll(0); /////////
-	render(screen0);
-	SDL_UpdateRect(screen, 0, 0, 0, 0);
+	render(screen0 + a4);
 }
 
 static void draw_pixel(char *out, int offset, int color)
@@ -231,12 +229,11 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 {
 	unsigned char *out;
-	int d1, d4;
+	int d4;
 	int count, offset;
 	int bitmask, color;
 
 	out = screen0;
-	d1 = 0;
 
 	for (color = 0; color < 16; color++)
 	{
@@ -510,15 +507,25 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 	}
 }
 
-void flip_screens(int d0)
+void flip_screens(int d0, int d1)
 {
+	int y;
+
 	if (d0 == 0)
 	{
-		memcpy(screen2, screen0, sizeof(screen0));
+		memcpy(screen2, screen0, sizeof(screen4));
+	}
+	else if (d0 < 8)
+	{
+		memcpy(d1 ? screen4 : screen0, screen2, sizeof(screen4));
 	}
 	else
 	{
-		memcpy(screen0, screen2, sizeof(screen0));
+		for (y=0; y<192; y++)
+		{
+			memcpy(screen0 + y*304, screen4 + y*304 + d0*2, 304 - d0*2);
+			memcpy(screen0 + y*304 + 304 - d0*2, screen2 + y*304, d0*2);
+		}
 	}
 }
 
@@ -547,6 +554,8 @@ int play_sequence(int offset, int fps)
 {
 	int d0, d1, d3, d4, d6, d7;
 	int a0, a1, a2, a3, a4, a5;
+
+	rest(0);
 
 	/* This code is obscure. I have no idea why it's written this way,
 	 * or how the hell it works, but .. it just works!.
@@ -598,7 +607,7 @@ int play_sequence(int offset, int fps)
 	
 	d0 = 0;
 	d1 = 3;
-	flip_screens(d0);
+	flip_screens(d0, d1);
 	goto loc_d15e;
 
 	loc_a2_is_1:
@@ -606,11 +615,11 @@ int play_sequence(int offset, int fps)
 	a5 += 8;
 	d0 = 3;
 	d1 = 0;
-	flip_screens(d0);
+	flip_screens(d0, d1);
 
 	d0 = 3;
 	d1 = 4;
-	flip_screens(d0);
+	flip_screens(d0, d1);
 
 	/* decompress into screen2 */
 	a2 = get_long(a5);
@@ -648,7 +657,7 @@ int play_sequence(int offset, int fps)
 	{
 		d0 = d6;
 		d1 = 5;
-		flip_screens(d0);
+		flip_screens(d0, d1);
 		d6 += 8;
 		goto loc_d1f4;
 	}
@@ -667,7 +676,7 @@ int play_sequence(int offset, int fps)
 	{
 		d0 = 3;
 		d1 = 0;
-		flip_screens(d0);
+		flip_screens(d0, d1);
 		goto loc_d1f4;
 	}
 
@@ -675,7 +684,7 @@ int play_sequence(int offset, int fps)
 	{
 		d0 = d6;
 		d1 = 5;
-		flip_screens(d0);
+		flip_screens(d0, d1);
 		d6 += 8;
 		goto loc_d1f4;
 	}
@@ -701,8 +710,7 @@ int play_sequence(int offset, int fps)
 
 	loc_d1d4:
 	/* clr.b   ($C0401).l */
-	set_scroll(d0/304); ///////////////
-	copy_to_screen();
+	copy_to_screen(a4);
 	post_render(fps);
 	/* LOG(("d1d4\n")); */
 	a4 += d0;
@@ -743,8 +751,8 @@ int play_sequence(int offset, int fps)
 		a3 = a0 + d4;
 		anim_interesting(a1, a2, a3, (unsigned short)d3);
 	}
-	
-	/* a4 = screen0 */
+
+	a4 = 0;
 	if (d6 != 3)
 	{
 		goto loc_d268;
@@ -782,7 +790,7 @@ int play_sequence(int offset, int fps)
 	d7++;
 
 #if 0
-	this code was never executed. I wonder why it's even here :)
+	/* this code was never executed. I wonder why it's even here :) */
 
 	if (byte_0_7FF96 == 0)
 	{
@@ -809,7 +817,7 @@ int play_sequence(int offset, int fps)
 	loc_d2ae:
 #endif
 
-	copy_to_screen();
+	copy_to_screen(a4*2);
 	post_render(fps);
 	goto loc_d160;
 
@@ -825,10 +833,19 @@ int play_sequence(int offset, int fps)
 int play_death_animation(int index)
 {
 	unsigned long offset;
+	int old, ret;
+
+	old = toggle_aux(0);
+	toggle_aux(old);
 
 	/* set palette 2 ? */
 	offset = 0xf910 + (index << 2);
-	return play_sequence(get_long(offset), 15);
+	ret = play_sequence(get_long(offset), 15);
+
+	toggle_aux(old);
+	rest(0);
+
+	return ret;
 }
 
 /** Plays an animation file
@@ -883,7 +900,7 @@ int play_animation(const char *filename, int fileoffset)
 		ptr = get_memory_ptr(palette_offset);
 		set_palette_rgb12(ptr);
 
-		scene_offset = get_long(0x80a6 + (scene << 2));
+		scene_offset = get_long(0x80a6 + (pattern << 2));
 		stop = play_sequence(scene_offset, fps_);
 
 		pattern++;
@@ -893,7 +910,10 @@ int play_animation(const char *filename, int fileoffset)
 			break;
 		}
 
+		rest(fps_);
 	}
+
+	rest(0);
 
 	/* just in case, clean variable 250 (key_a pressed) */
 	set_variable(250, 0);

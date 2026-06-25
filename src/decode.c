@@ -2431,12 +2431,12 @@ int decode(int current_task, int start_pc)
 
 			case 0x70:
 			op_70();
-			LOG(("\n");
+			LOG(("\n"));
 			break;
 	
 			case 0x71:
 			var1 = next_pc();
-			set_variable(var1, get_variable(var1) + 1));
+			set_variable(var1, get_variable(var1) + 1);
 			LOG(("var[%d]++\n", var1));
 			break;
 	
