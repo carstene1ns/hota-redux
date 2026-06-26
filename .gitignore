@@ -4,6 +4,8 @@
 
 # save game
 quicksave
+# key recording
+recorded-keys
 
 # game data
 *.iso
@@ -15,5 +17,8 @@ quicksave
 *.MAT
 *.SND
 
-*.ogg
+*.wav
 *.mp3
+*.ogg
+*.opus
+*.flac

@@ -1834,6 +1834,17 @@ int decode(int current_task, int start_pc)
 				{
 					next_script = 8;
 				}
+				#if 0
+				/* FIXME c1: this happens when game over screen is left
+				 * with variable 226 != 0
+				 */
+				else if (next_script == 9)
+				{
+					/* return to password selection */
+					next_script = 7;
+					leave = 1;
+				}
+				#endif
 				else if (next_script == 7)
 				{
 					play_music_track(35, 0);

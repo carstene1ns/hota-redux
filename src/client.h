@@ -24,14 +24,19 @@
 
 typedef struct
 {
-	int paused;
-	int quit;
+	bool paused; // FIXME: unused
+	bool quit;
+
+	bool speed_throttle;
 
 	int scale;
-	int nosound;
-	int fullscreen;
-	int speed_throttle;
 	int filtered;
+	int fullscreen;
+
+	int nosound;
+
+	int joy_index;
+
 	bool use_iso;
 	char *iso_prefix;
 	char *music_prefix;

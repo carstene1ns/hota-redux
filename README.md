@@ -33,6 +33,7 @@ Here are some interesting settings:
 * `--music` `prefix` use this prefix for wav/mp3/ogg/opus/flac music
                      (default: iso prefix)
 * `--room` `n`       start from script n
+* `--joystick` `n`   use joystick number n instead of autodetect
 * `--record`         record your key pressed
 * `--replay`         replay recorded sequence
 * `--fastest`        play game as fast as possible

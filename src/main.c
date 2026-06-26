@@ -71,7 +71,7 @@ int next_script;
 int current_backdrop;
 int current_room;
 
-int speed_throttle = 0;
+bool speed_throttle = false;
 
 int debug_flag = 0;
 int test_flag = 0;
@@ -85,8 +85,20 @@ short new_task_pc[64];
 short enabled_tasks[64];
 short new_enabled_tasks[64];
 
-static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
-static int key_reset_record;
+enum {
+	KEY_UP = BIT(0),
+	KEY_DOWN = BIT(1),
+	KEY_LEFT = BIT(2),
+	KEY_RIGHT = BIT(3),
+	KEY_A = BIT(4),
+	KEY_B = BIT(5),
+	KEY_C = BIT(6),
+	KEY_START = BIT(7)
+};
+
+static int key_state;
+
+#define JOY_DEADZONE 11000
 
 static unsigned int last_tick = 0, last_tick_fp = 0;
 
@@ -99,7 +111,6 @@ FILE *record_fp = 0;
 
 /** scratchpad used for unpacking code */
 static unsigned char scratchpad[29184];
-
 
 #ifdef ENABLE_DEBUG
 short old_var[256+64*32];
@@ -147,7 +158,7 @@ static void atexit_callback()
 
 static int initialize()
 {
-	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO);
+	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_GAMEPAD);
 	atexit(atexit_callback);
 
 	if (cls.nosound == 0)
@@ -169,6 +180,9 @@ static int initialize()
 	
 	vm_reset();
 	set_variable(227, 1);
+
+	// reset keys
+	key_state = 0;
 
 	if (render_create_surface() < 0)
 	{
@@ -232,14 +246,7 @@ void read_keys_from_record()
 		ERROR("record file ended!\n");
 	}
 
-	key_up = (c >> 7) & 1;
-	key_down = (c >> 6) & 1;
-	key_left = (c >> 5) & 1;
-	key_right = (c >> 4) & 1;
-	key_a = (c >> 3) & 1;
-	key_b = (c >> 2) & 1;
-	key_c = (c >> 1) & 1;
-	key_select = (c >> 0) & 1;
+	key_state = c;
 }
 
 /** Adds a single key to the record file
@@ -249,17 +256,10 @@ void read_keys_from_record()
 */
 void add_keys_to_record()
 {
-	int c;
-
-	c = (key_up << 7) | (key_down << 6);
-	c = c | (key_left << 5) | (key_right << 4);
-	c = c | (key_a << 3) | (key_b << 2);
-	c = c | (key_c << 1) | key_select;
-
- 	cached_recorded_keys[cached_keys_offset++] = c;
- 	if (cached_keys_offset == sizeof(cached_recorded_keys))
+	cached_recorded_keys[cached_keys_offset++] = key_state;
+	if (cached_keys_offset == sizeof(cached_recorded_keys))
 	{
- 		/* if the player never quicksaves or quickloads */
+		/* if the player never quicksaves or quickloads */
 		flush_recorded_keys();
 	}
 }
@@ -280,30 +280,30 @@ void update_keys()
 
 	flags = 0;
 
-	if (key_right)
+	if (key_state & KEY_RIGHT)
 	{
 		set_variable(252, 1);
 		flags |= 1;
 	}
-	else if (key_left)
+	else if (key_state & KEY_LEFT)
 	{
 		set_variable(252, -1);
 		flags |= 2;
 	}
-	else if (key_down)
+	else if (key_state & KEY_DOWN)
 	{
 		set_variable(251, 1);
 		set_variable(229, 1);
 		flags |= 4;
 	}
 
-	if (key_up)
+	if (key_state & KEY_UP)
 	{
 		set_variable(229, -1);
 		flags |= 8;
 	}
 
-	if (key_c)
+	if (key_state & KEY_C)
 	{
 		set_variable(251, -1);
 		flags |= 8;
@@ -316,15 +316,18 @@ void update_keys()
 	set_variable(250, 0);
 	set_variable(254, get_variable(253));
 
-	if (key_b)
+	if (key_state & KEY_B)
 	{
 		set_variable(254, (unsigned short)(get_variable(254) | 0x40));
 	}
-	else if (key_a)
+	else if (key_state & KEY_A)
 	{
 		set_variable(250, 1);
 		set_variable(254, (unsigned short)(get_variable(254) | 0x80));
 	}
+
+	// FIXME c1: this allows leaving game over screen
+	//if (key_state & KEY_START) set_variable(226, 1);
 }
 
 /** Loads a quicksave file
@@ -435,12 +438,6 @@ void quicksave()
 	fclose(fp);
 }
 
-void leave_game()
-{
-	flush_recorded_keys();
-	exit(0);
-}
-
 /** Processes SDL events
 
     This processes windows messages, keyboard pressed, joystick moves,
@@ -450,180 +447,258 @@ void check_events()
 {
 	SDL_Event event;
 
+	#define SET_KEY(x, b) \
+		(key_state = (b) ? key_state | (x) : key_state & ~(x))
+
 	while (SDL_PollEvent(&event))
 	{
-	        switch (event.type) 
+		if(event.type == SDL_EVENT_QUIT) {
+			cls.quit = true;
+		}
+		else if (event.type == SDL_EVENT_GAMEPAD_ADDED)
 		{
-			case SDL_EVENT_KEY_UP:
-			switch(event.key.key)
+			const SDL_JoystickID which = event.gdevice.which;
+			SDL_Gamepad *gamepad = SDL_OpenGamepad(which);
+			if (gamepad && cls.joy_index == -1)
 			{
-				case SDLK_RIGHT:
-				key_right = 0;
-				break;
-	
-				case SDLK_LEFT:
-				key_left = 0;
-				break;
-	
-				case SDLK_UP:
-				key_up = 0;
-				break;
-	
-				case SDLK_DOWN:
-				key_down = 0;
-				break;
-	
-				case SDLK_Z:
-				case SDLK_A:
-				key_a = 0;
-				break;
-	
-				case SDLK_X:
-				case SDLK_S:
-				key_b = 0;
-				break;
-	
-				case SDLK_C:
-				case SDLK_D:
-				key_c = 0;
-				break;
-	
-				case SDLK_Q:
-				key_a = 0;
-				key_reset_record = 0;
-				break;
-	
-				case SDLK_SPACE:
-				speed_throttle = 0;
-				break;
-	
-				default:
-				/* keep -Wall happy */
-				break;
+				LOG_MAIN("Opened GamePad %d\n", which);
+				cls.joy_index = which;
 			}
-			break;
-	
-	        	case SDL_EVENT_KEY_DOWN:
-			switch(event.key.key)
+		}
+		else if (event.type == SDL_EVENT_GAMEPAD_REMOVED)
+		{
+			const SDL_JoystickID which = event.gdevice.which;
+			SDL_Gamepad *gamepad = SDL_GetGamepadFromID(which);
+			if (gamepad)
 			{
-				#ifdef ENABLE_DEBUG
-				/* enable/disable sprites */
-				case SDLK_1:
-				case SDLK_2:
-				case SDLK_3:
-				case SDLK_4:
-				case SDLK_5:
-				case SDLK_6:
-				case SDLK_7:
-				case SDLK_8:
-				case SDLK_9:
+				SDL_CloseGamepad(gamepad);
+				LOG_MAIN("Closed GamePad %d\n", which);
+				if (cls.joy_index == which)
 				{
-					int tmp = event.key.key - SDLK_1 + 1;
-	
-					if (event.key.mod & SDL_KMOD_SHIFT)
+					cls.joy_index = -1;
+				}
+			}
+		}
+		else if (event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
+		{
+			const SDL_JoystickID which = event.gaxis.which;
+			if (cls.joy_index == which)
+			{
+				if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
+				{
+					SET_KEY(KEY_LEFT, event.gaxis.value < -JOY_DEADZONE);
+					SET_KEY(KEY_RIGHT, event.gaxis.value > JOY_DEADZONE);
+				}
+				else if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
+				{
+					SET_KEY(KEY_UP, event.gaxis.value < -JOY_DEADZONE);
+					SET_KEY(KEY_DOWN, event.gaxis.value > JOY_DEADZONE);
+				}
+			}
+		}
+		else if ((event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) || (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN))
+		{
+			const SDL_JoystickID which = event.gbutton.which;
+			if (cls.joy_index == which)
+			{
+				switch(event.gbutton.button)
+				{
+					case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+					SET_KEY(KEY_RIGHT, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+					SET_KEY(KEY_LEFT, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_DPAD_UP:
+					SET_KEY(KEY_UP, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+					SET_KEY(KEY_DOWN, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_WEST:
+					SET_KEY(KEY_A, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_SOUTH:
+					SET_KEY(KEY_B, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_EAST:
+					SET_KEY(KEY_C, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_NORTH:
+					SET_KEY(KEY_START, event.gbutton.down);
+					break;
+
+					case SDL_GAMEPAD_BUTTON_GUIDE:
+					speed_throttle = event.gbutton.down;
+					break;
+
+					default:
+					/* keep -Wall happy */
+					break;
+				}
+
+				if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN)
+				{
+					switch(event.gbutton.button)
 					{
-						tmp = tmp + 10;
+						case SDL_GAMEPAD_BUTTON_BACK:
+						cls.quit = true;
+						break;
+
+						case SDL_GAMEPAD_BUTTON_START:
+						toggle_filter();
+						break;
+
+						case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+						quicksave();
+						break;
+
+						case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+						quickload();
+						break;
+
+						default:
+						/* keep -Wall happy */
+						break;
 					}
-	
-					sprites[tmp].u1 ^= 0x80;
 				}
+			}
+		}
+		else if ((event.type == SDL_EVENT_KEY_UP) || (event.type == SDL_EVENT_KEY_DOWN))
+		{
+			switch(event.key.key)
+			{
+				case SDLK_RIGHT:
+				SET_KEY(KEY_RIGHT, event.key.down);
 				break;
 
-				/* enable/disable debug messages */
-				case SDLK_KP_1:
-				case SDLK_KP_2:
-				case SDLK_KP_3:
-				case SDLK_KP_4:
-				case SDLK_KP_5:
-				case SDLK_KP_6:
-				case SDLK_KP_7:
-				case SDLK_KP_8:
-				//case SDLK_KP_9:
-				{
-					int tmp = event.key.key - SDLK_KP_1 + 1;
-					debug_flag ^= 1<<tmp;
-				}
-				break;
-				#endif
-	
-				case SDLK_ESCAPE:
-				cls.quit = 1;
-				break;
-	
-				case SDLK_RIGHT:
-				key_right = 1;
-				break;
-				
 				case SDLK_LEFT:
-				key_left = 1;
+				SET_KEY(KEY_LEFT, event.key.down);
 				break;
-	
+
 				case SDLK_UP:
-				key_up = 1;
+				SET_KEY(KEY_UP, event.key.down);
 				break;
-				
+
 				case SDLK_DOWN:
-				key_down = 1;
+				SET_KEY(KEY_DOWN, event.key.down);
 				break;
-	
+
 				case SDLK_Z:
 				case SDLK_A:
-				key_a = 1;
+				SET_KEY(KEY_A, event.key.down);
 				break;
-	
+
 				case SDLK_X:
 				case SDLK_S:
-				key_b = 1;
+				SET_KEY(KEY_B, event.key.down);
 				break;
-	
+
 				case SDLK_C:
 				case SDLK_D:
-				key_c = 1;
+				SET_KEY(KEY_C, event.key.down);
 				break;
-	
-				case SDLK_F:
-				toggle_filter();
+
+				case SDLK_LCTRL:
+				SET_KEY(KEY_START, event.key.down);
 				break;
-	
-				case SDLK_F5:
-				quicksave();
-				break;
-	
-				case SDLK_F7:
-				quickload();
-				break;
-	
-				case SDLK_RETURN:
-				if (event.key.mod & SDL_KMOD_ALT)
-				{
-					toggle_fullscreen();
-				}
-				break;
-	
-				case SDLK_Q:
-				key_a = 1;
-				key_reset_record = 1;
-				break;
-	
+
 				case SDLK_SPACE:
-				speed_throttle = 1;
-				break;
-	
-				case SDLK_F12:
-				screenshot();
+				speed_throttle = event.key.down;
 				break;
 
 				default:
 				/* keep -Wall happy */
 				break;
 			}
-			break;
-	
-			case SDL_EVENT_QUIT:
-			leave_game();
-			break;
+
+			if (event.type == SDL_EVENT_KEY_DOWN)
+			{
+				switch(event.key.key)
+				{
+					#ifdef ENABLE_DEBUG
+					/* enable/disable sprites */
+					case SDLK_1:
+					case SDLK_2:
+					case SDLK_3:
+					case SDLK_4:
+					case SDLK_5:
+					case SDLK_6:
+					case SDLK_7:
+					case SDLK_8:
+					case SDLK_9:
+					{
+						int tmp = event.key.key - SDLK_1 + 1;
+
+						if (event.key.mod & SDL_KMOD_SHIFT)
+						{
+							tmp = tmp + 10;
+						}
+
+						sprites[tmp].u1 ^= 0x80;
+					}
+					break;
+
+					/* enable/disable debug messages */
+					case SDLK_KP_1:
+					case SDLK_KP_2:
+					case SDLK_KP_3:
+					case SDLK_KP_4:
+					case SDLK_KP_5:
+					case SDLK_KP_6:
+					case SDLK_KP_7:
+					case SDLK_KP_8:
+					//case SDLK_KP_9:
+					{
+						int tmp = event.key.key - SDLK_KP_1 + 1;
+						debug_flag ^= BIT(tmp);
+					}
+					break;
+					#endif
+
+					case SDLK_ESCAPE:
+					cls.quit = true;
+					break;
+
+					case SDLK_F:
+					toggle_filter();
+					break;
+
+					case SDLK_F5:
+					quicksave();
+					break;
+
+					case SDLK_F7:
+					quickload();
+					break;
+
+					case SDLK_F12:
+					screenshot();
+					break;
+
+					case SDLK_RETURN:
+					if (event.key.mod & SDL_KMOD_ALT)
+					{
+						toggle_fullscreen();
+					}
+					break;
+
+					default:
+					/* keep -Wall happy */
+					break;
+				}
+			}
 		}
 	}
+
+	#undef SET_KEY
 }
 
 void rest(int fps)
@@ -638,7 +713,7 @@ void rest(int fps)
 			return;
 		}
 
-		if (speed_throttle == 1)
+		if (speed_throttle)
 		{
 			/* 10 times faster */
 			fps = fps*10;
@@ -693,7 +768,7 @@ int play_anm(anm_file_t *anm, int n, int skippable)
 	ret = 0;
 	for (seq = 0; seq < n; seq++)
 	{
-		if (cls.quit == 0)
+		if (!cls.quit)
 		{
 			int ok;
 
@@ -734,10 +809,10 @@ static void play_intro()
 */
 static void run()
 {
-	cls.quit = 0;
+	cls.quit = false;
 	init_tasks();
 
-	if (next_script == 0)
+	if (!next_script)
 	{
 		/* if no room specified, then follow the original flow:
 		 * first play intro, then jump to code entry script.
@@ -748,11 +823,11 @@ static void run()
 
 	rest(0);
 
-	while (cls.quit == 0)
+	while (!cls.quit)
 	{
 		int i;
 
-		if (next_script != 0)
+		if (next_script)
 		{
 			current_room = next_script;
 			reset_sprite_list();
@@ -780,18 +855,15 @@ static void run()
 
 		for (i=0; i<MAX_TASKS; i++)
 		{
-			int d0;
-
 			/* 70d0 */
 			enabled_tasks[i] = new_enabled_tasks[i];
 
-			d0 = new_task_pc[i];
+			int d0 = new_task_pc[i];
 			if (d0 == -1)
 			{
 				continue;
 			}
-			
-			if (d0 == -2)
+			else if (d0 == -2)
 			{
 				d0 = -1;
 			}		
@@ -849,13 +921,13 @@ void sprite_test()
 	sprites[0].x = 10;
 	sprites[0].y = 10;
 
-	cls.quit = 0;
+	cls.quit = false;
 
 	redraw = 1;
 	set_palette(0x11);
 	rest(0);
 
-	while (cls.quit == 0)
+	while (!cls.quit)
 	{
 		int a4;
 
@@ -882,7 +954,7 @@ void sprite_test()
 
 		update_keys();
 
-		if (get_variable(252) == 1)
+		if (get_variable(252) == 1) // right
 		{
 			int i = (sprites[0].frame & 0x7f) + 1;
 			sprites[0].frame = (sprites[0].frame & 0x80) | i;
@@ -894,7 +966,7 @@ void sprite_test()
 			redraw = 1;
 		}
 
-		if (get_variable(252) == -1)
+		if (get_variable(252) == -1) // left
 		{
 			if (sprites[0].frame > 0)
 			{
@@ -904,14 +976,14 @@ void sprite_test()
 			}
 		}
 
-		if (get_variable(229) == 1)
+		if (get_variable(229) == 1) // down
 		{
 			redraw = 1;
 			sprites[0].index++;
 			sprites[0].frame &= 0x80;
 		}
 
-		if (get_variable(229) == -1)
+		if (get_variable(229) == -1) // up
 		{
 			if (sprites[0].index > 0)
 			{
@@ -921,12 +993,13 @@ void sprite_test()
 			}
 		}
 
-		if (get_variable(250))
+		if (get_variable(250)) // a
 		{
 			/* flip */
 			sprites[0].frame ^= 0x80;
 		}
 
+		// reset direction
 		set_variable(229, 0);
 		set_variable(252, 0);
 	}
@@ -945,6 +1018,7 @@ static void help()
 	puts("\t--room n       start from room <n>");
 	puts("\t--iso prefix   use ISO image <prefix.iso>");
 	puts("\t--music prefix use music <prefix.[wav/mp3/ogg/opus/flac]>");
+	puts("\t--joystick n   use joytick <n> instead of autodetect");
 	puts("\t--sprite-test  run sprite test (use with room)");
 	puts("\t--intro-test   play all animations");
 	puts("\t--fastest      speed throttle");
@@ -967,6 +1041,7 @@ static struct parg_option options[] =
 	{"record", PARG_NOARG, &record_flag, 1},
 	{"replay", PARG_NOARG, &replay_flag, 1},
 	{"scale", PARG_REQARG, NULL, 's'},
+	{"joystick", PARG_REQARG, NULL, 'j'},
 	{"filter", PARG_NOARG, NULL, 'f'},
 	{"fastest", PARG_NOARG, &fastest_flag, 1},
 	{0, 0, 0, 0}
@@ -977,12 +1052,17 @@ int main(int argc, char **argv)
 	next_script = 0;
 
 	// set default options
-	cls.scale = 1;
+	cls.paused = false;
+	cls.speed_throttle = false;
+
+	cls.scale = 2;
 	cls.filtered = 0;
 	cls.fullscreen = 0;
-	cls.speed_throttle = 0;
-	cls.paused = 0;
+
 	cls.nosound = 0;
+
+	cls.joy_index = -1;
+
 	cls.use_iso = false;
 	cls.iso_prefix = NULL;
 	cls.music_prefix = NULL;
@@ -1018,6 +1098,10 @@ int main(int argc, char **argv)
 
 			case 'n':
 			cls.nosound = 1;
+			break;
+
+			case 'j':
+			cls.joy_index = atoi(ps.optarg);
 			break;
 
 			case 'i':

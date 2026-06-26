@@ -20,17 +20,18 @@
 #define DEBUG_H
 
 #include <stdio.h>
+#include "common.h"
 
 enum DEBUG_FLAGS {
-	DEBUG_DEFAULT = 1<<0,
-	DEBUG_SCRIPT = 1<<1,
-	DEBUG_TASK = 1<<2,
-	DEBUG_SPRITE = 1<<3,
-	DEBUG_SCREEN = 1<<4,
-	DEBUG_AUDIO = 1<<5,
-	DEBUG_MAIN = 1<<6,
-	DEBUG_ANIM = 1<<7,
-	DEBUG_FILE = 1<<8
+	DEBUG_DEFAULT = BIT(0),
+	DEBUG_SCRIPT = BIT(1),
+	DEBUG_TASK = BIT(2),
+	DEBUG_SPRITE = BIT(3),
+	DEBUG_SCREEN = BIT(4),
+	DEBUG_AUDIO = BIT(5),
+	DEBUG_MAIN = BIT(6),
+	DEBUG_ANIM = BIT(7),
+	DEBUG_FILE = BIT(8)
 };
 
 extern int debug_flag;

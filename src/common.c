@@ -1,5 +1,5 @@
 /*
- * Heart of The Alien: Common 68000 opcodes
+ * Heart of The Alien: Common/68000 opcodes
  * Copyright (c) 2004 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
