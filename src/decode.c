@@ -17,12 +17,10 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 #include <assert.h>
-#include <SDL.h>
 
 #include "vm.h"
-#include "music.h"
+#include "audio.h"
 #include "debug.h"
-#include "sound.h"
 #include "common.h"
 #include "decode.h"
 #include "render.h"
@@ -2431,12 +2429,12 @@ int decode(int current_task, int start_pc)
 
 			case 0x70:
 			op_70();
-			LOG(("\n");
+			LOG(("\n"));
 			break;
 	
 			case 0x71:
 			var1 = next_pc();
-			set_variable(var1, get_variable(var1) + 1));
+			set_variable(var1, get_variable(var1) + 1);
 			LOG(("var[%d]++\n", var1));
 			break;
 	

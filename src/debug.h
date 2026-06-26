@@ -1,6 +1,8 @@
 #ifndef __DEBUG_INCLUDED__
 #define __DEBUG_INCLUDED__
 
+#include <stdio.h>
+
 extern int debug_flag;
 
 #ifdef ENABLE_DEBUG

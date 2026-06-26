@@ -62,7 +62,7 @@ int extl(unsigned short w)
 void panic(const char *string)
 {
 	printf("panic: %s\n", string);
-	exit(0);
+	exit(-1);
 }
 
 void fputw(unsigned short s, FILE *fp)
@@ -79,4 +79,3 @@ unsigned short fgetw(FILE *fp)
 	s = (s << 8) | fgetc(fp);
 	return s;
 }
-

@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: Renderer
  * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,21 +18,23 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 #include <string.h>
-#include <SDL.h>
+#include <SDL3/SDL.h>
+
 #include "debug.h"
 #include "render.h"
 #include "game2bin.h"
 #include "client.h"
 
-#include "scale2x.h"
-#include "scale3x.h"
-
 static int fullscreen = 0;
 static int scroll_reg = 0;
 extern int fullscreen_flag;
-extern int filtered_flag;
-SDL_Color palette[256];
-extern SDL_Surface *screen;
+
+static SDL_Palette *palette;
+static SDL_Color palette_colors[16];
+static SDL_Surface *surface;
+static SDL_Texture *texture;
+static SDL_Window *window;
+static SDL_Renderer *renderer;
 
 static int palette_changed = 0;
 static int current_palette = 0;
@@ -62,30 +65,41 @@ int get_scroll_register()
 	return scroll_reg;
 }
 
-void render1x(char *src)
+/** Renders a virtual screen
+    @param src
+*/
+void render(unsigned char *src)
 {
 	int y, p;
+
+	if (palette_changed)
+	{
+		palette_changed = 0;
+		SDL_SetPaletteColors(palette, palette_colors, 0, 16);
+	}
+
+	if (SDL_MUSTLOCK(surface)) SDL_LockSurface(surface);
 
 	if (scroll_reg == 0)
 	{
 		/* no scroll */
 		for (y=0; y<192; y++)
 		{
-			memcpy((char *)screen->pixels + y*screen->pitch, src + 304*y, 304);
+			memcpy((char *)surface->pixels + y*surface->pitch, src + 304*y, 304);
 		}
 	}
 	else if (scroll_reg < 0)
 	{
 		/* scroll from bottom */
-		p = 1 - scroll_reg;
+		p = - scroll_reg;
 		for (y=p; y<192; y++)
 		{
-			memcpy((char *)screen->pixels + (y-p)*screen->pitch, src + 304*y, 304);
+			memcpy((char *)surface->pixels + (y-p)*surface->pitch, src + 304*y, 304);
 		}
 
 		for (y=192; y<192+p; y++)
 		{
-			memcpy((char *)screen->pixels + (y-p)*screen->pitch, src + 304*(y-192), 304);
+			memcpy((char *)surface->pixels + (y-p)*surface->pitch, src + 304*191, 304);
 		}
 	}
 	else 
@@ -94,125 +108,23 @@ void render1x(char *src)
 		p = scroll_reg;
 		for (y=0; y<p; y++)
 		{
-			memcpy((char *)screen->pixels + y*screen->pitch, src + 304*(191-p+y), 304);
+			memcpy((char *)surface->pixels + y*surface->pitch, src, 304);
 		}
 
 		for (y=p; y<192; y++)
 		{
-			memcpy((char *)screen->pixels + y*screen->pitch, src + 304*(y-p), 304);
+			memcpy((char *)surface->pixels + y*surface->pitch, src + 304*(y-p), 304);
 		}
 	}
-}
 
-/* advmame2x scaler */
-void render2x_scaled(char *src)
-{
-	scale2x(screen, src, 304, 304, 192);
-}
-
-/* advmame3x scaler */
-void render3x_scaled(char *src)
-{
-	scale3x(screen, src, 304, 304, 192);
-}
-
-/** Simple X2 scaler
-    @param src
-*/
-void render2x(char *src)
-{
-	int x, y;
-	unsigned char wide[304*2];
-        
-	for (y=0; y<192; y++)
-	{
-		unsigned char *srcp, *widep;
-
-		srcp = src + 304*y;
-		widep = wide;
-		for (x=0; x<304; x++)
-		{
-			*widep++ = *srcp;
-			*widep++ = *srcp++;
-		}
-
-		memcpy((char *)screen->pixels + y*2*screen->pitch, wide, 304*2);
-		memcpy((char *)screen->pixels + (y*2+1)*screen->pitch, wide, 304*2);
-	}
-}
-
-/** Simple X3 scaler
-    @param src
-*/
-void render3x(char *src)
-{
-	int x, y;
-	unsigned char wide[304*3];
-        
-	for (y=0; y<192; y++)
-	{
-		unsigned char *srcp, *widep;
-
-		srcp = src + 304*y;
-		widep = wide;
-		for (x=0; x<304; x++)
-		{
-			*widep++ = *srcp;
-			*widep++ = *srcp;
-			*widep++ = *srcp++;
-		}
-
-		memcpy((char *)screen->pixels + y*3*screen->pitch, wide, 304*3);
-		memcpy((char *)screen->pixels + (y*3+1)*screen->pitch, wide, 304*3);
-		memcpy((char *)screen->pixels + (y*3+2)*screen->pitch, wide, 304*3);
-	}
-}
-
-/** Renders a virtual screen
-    @param src
-*/
-void render(unsigned char *src)
-{
-	SDL_LockSurface(screen);
-
-	if (palette_changed)
-	{
-		palette_changed = 0;
-		SDL_SetColors(screen, palette, 0, 256);
-	}
-
-	switch(cls.scale)
-	{
-		case 1:
-		/* normal 1x */
-		render1x(src);
-		break;
-
-		case 2:
-		if (filtered_flag == 0)
-		{
-			render2x(src);
-		}
-		else
-		{
-			render2x_scaled(src);
-		}
-		break;
-
-		case 3:
-		if (filtered_flag == 0)
-		{
-			render3x(src);
-		}
-		else
-		{
-			render3x_scaled(src);
-		}
-		break;
-	}
+	if (SDL_MUSTLOCK(surface)) SDL_UnlockSurface(surface);
 
 	scroll_reg = 0;
-	SDL_UnlockSurface(screen);
+
+	SDL_RenderClear(renderer);
+	SDL_UpdateTexture(texture, NULL, surface->pixels, surface->pitch);
+	SDL_RenderTexture(renderer, texture, NULL, NULL);
+	SDL_RenderPresent(renderer);
 }
 
 /** Module initializer
@@ -239,9 +151,10 @@ void set_palette_rgb12(unsigned char *rgb12)
 		g = ((c >> 4) & 0xf) << 4;
 		b = ((c >> 8) & 0xf) << 4;
 
-		palette[i].r = r;
-		palette[i].g = g;
-		palette[i].b = b;
+		palette_colors[i].r = r | (r >> 4);
+		palette_colors[i].g = g | (g >> 4);
+		palette_colors[i].b = b | (b >> 4);
+		palette_colors[i].a = 0xFF;
 	}
 
 	palette_changed = 1;
@@ -256,56 +169,76 @@ void set_palette(int which)
 	current_palette = which;
 	set_palette_rgb12(rgb12);
 
-	palette[255].r = 255;
-	palette[255].g = 0;
-	palette[255].b = 255;
+	//palette_colors[255].r = 255;
+	//palette_colors[255].g = 0;
+	//palette_colors[255].b = 255;
 }
 
 void toggle_fullscreen()
 {
-	/* hack, fullscreen not supported at scale==3 */
-	if (cls.scale == 3)
-	{
-		return;
-	}
-
 	fullscreen = 1 ^ fullscreen;
-	SDL_FreeSurface(screen);
-	screen = 0;
+
+	SDL_SetWindowFullscreen(window, fullscreen);
 
 	if (fullscreen == 0)
 	{
-		LOG(("create SDL surface of 304x192x8\n"));
-
-		screen = SDL_SetVideoMode(304*cls.scale, 192*cls.scale, 8, SDL_SWSURFACE);
-		SDL_SetColors(screen, palette, 0, 256);
-		SDL_ShowCursor(1);
+		SDL_ShowCursor();
 	}
 	else
 	{
-		int w, h;
-
-		w = 320*cls.scale;
-		h = 200*cls.scale;
-
-		LOG(("setting fullscreen mode %dx%dx8\n", w, h));
-
-		screen = SDL_SetVideoMode(w, h, 8, SDL_SWSURFACE|SDL_HWSURFACE|SDL_FULLSCREEN);
-
-		SDL_SetColors(screen, palette, 0, 256);
-		SDL_ShowCursor(0);
+		LOG(("setting fullscreen mode\n"));
+		SDL_HideCursor();
 	}
 }
 
 int render_create_surface()
 {
-	screen = SDL_SetVideoMode(304*cls.scale, 192*cls.scale, 8, SDL_SWSURFACE);
-	if (screen == NULL) 
+	surface = SDL_CreateSurface(304, 192, SDL_PIXELFORMAT_INDEX8);
+	if (surface == NULL)
 	{
 		return -1;
 	}
 
-	SDL_WM_SetCaption("Heart of The Alien Redux", 0);
+	window = SDL_CreateWindow("Heart of The Alien Redux", 304 * cls.scale,
+		192 * cls.scale, SDL_WINDOW_RESIZABLE);
+	if (window == NULL)
+	{
+		return -2;
+	}
+
+	renderer = SDL_CreateRenderer(window, NULL);
+	if (renderer == NULL)
+	{
+		return -3;
+	}
+
+	SDL_SetRenderLogicalPresentation(renderer, 304, 192,
+		SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_INDEX8,
+		SDL_TEXTUREACCESS_STREAMING, 304, 192);
+	if (texture == NULL)
+	{
+		return -4;
+	}
+
+	if (cls.filtered)
+	{
+		SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+	}
+	else
+	{
+		SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_PIXELART);
+	}
+
+	palette = SDL_CreatePalette(16);
+	if (palette == NULL)
+	{
+		return -5;
+	}
+
+	SDL_SetSurfacePalette(surface, palette);
+	SDL_SetTexturePalette(texture, palette);
 
 	if (fullscreen_flag)
 	{
@@ -313,4 +246,9 @@ int render_create_surface()
 	}
 
 	return 0;
+}
+
+void screenshot()
+{
+	SDL_SavePNG(surface, "hota-screenshot.png");
 }

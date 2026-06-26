@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: Game loop and main
  * Copyright (c) 2004-2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,26 +22,23 @@
 #include <string.h>
 #include <memory.h>
 #include <assert.h>
-#include <SDL.h>
-#include <SDL_mixer.h>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
+#include "parg.h"
 
 #include "client.h"
 #include "vm.h"
 #include "rooms.h"
 #include "debug.h"
-#include "sound.h"
-#include "music.h"
+#include "audio.h"
 #include "common.h"
-#include "cd_iso.h"
+#include "files.h"
 #include "decode.h"
 #include "render.h"
 #include "screen.h"
 #include "sprites.h"
 #include "game2bin.h"
 #include "animation.h"
-#include "getopt.h"
-
-static char *VERSION = "1.2.2";
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
@@ -73,7 +71,6 @@ int next_script;
 int current_backdrop;
 int current_room;
 
-int filtered_flag = 0;
 int speed_throttle = 0;
 
 int debug_flag = 0;
@@ -91,14 +88,14 @@ short new_enabled_tasks[64];
 static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
 static int key_reset_record;
 
+static unsigned int last_tick = 0, last_tick_fp = 0;
+
 #define RECORDED_KEYS_CACHE 4096
 static int cached_keys_offset = 0;
 static unsigned char cached_recorded_keys[RECORDED_KEYS_CACHE];
 
 /** file descriptor where keys are written to, or read from */
 FILE *record_fp = 0;
-
-SDL_Surface *screen;
 
 /** scratchpad used for unpacking code */
 static unsigned char scratchpad[29184];
@@ -133,26 +130,29 @@ static int load_room(int index)
 
 /** atexit() callback
 */
-static void atexit_callback(void)
+static void atexit_callback()
 {
-	stop_music();
+	audio_done();
 	SDL_Quit();
+
+	if(cls.iso_prefix != NULL)
+	{
+		free(cls.iso_prefix);
+	}
+	if(cls.music_prefix != NULL)
+	{
+		free(cls.music_prefix);
+	}
 }
 
 static int initialize()
 {
-	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_CDROM|SDL_INIT_AUDIO);
+	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO);
 	atexit(atexit_callback);
 
 	if (cls.nosound == 0)
 	{
-		if (Mix_OpenAudio(44100, AUDIO_S16, 2, 4096) < 0) 
-		{
-			panic("Mix_OpenAudio failed\n");
-		}
-
-		music_init();
-		sound_init();
+		audio_init();
 	}
 
 	if (render_init() < 0)
@@ -339,6 +339,7 @@ void quickload()
 	if (fp == NULL)
 	{
 		perror("failed to load 'quicksave' file\n");
+		return;
 	}
 
 	current_room = fgetc(fp);
@@ -396,6 +397,7 @@ void quicksave()
 	if (fp == NULL)
 	{
 		perror("failed to create 'quicksave' file\n");
+		return;
 	}
 
 	fputc(current_room, fp);
@@ -452,8 +454,8 @@ void check_events()
 	{
 	        switch (event.type) 
 		{
-			case SDL_KEYUP:
-			switch(event.key.keysym.sym)
+			case SDL_EVENT_KEY_UP:
+			switch(event.key.key)
 			{
 				case SDLK_RIGHT:
 				key_right = 0;
@@ -471,22 +473,22 @@ void check_events()
 				key_down = 0;
 				break;
 	
-				case SDLK_z:
-				case SDLK_a:
+				case SDLK_Z:
+				case SDLK_A:
 				key_a = 0;
 				break;
 	
-				case SDLK_x:
-				case SDLK_s:
+				case SDLK_X:
+				case SDLK_S:
 				key_b = 0;
 				break;
 	
-				case SDLK_c:
-				case SDLK_d:
+				case SDLK_C:
+				case SDLK_D:
 				key_c = 0;
 				break;
 	
-				case SDLK_q:
+				case SDLK_Q:
 				key_a = 0;
 				key_reset_record = 0;
 				break;
@@ -501,8 +503,8 @@ void check_events()
 			}
 			break;
 	
-	        	case SDL_KEYDOWN:
-			switch(event.key.keysym.sym)
+	        	case SDL_EVENT_KEY_DOWN:
+			switch(event.key.key)
 			{
 				#ifdef ENABLE_DEBUG
 				/* enable/disable sprites */
@@ -516,9 +518,9 @@ void check_events()
 				case SDLK_8:
 				case SDLK_9:
 				{
-					int tmp = event.key.keysym.sym - SDLK_1 + 1;
+					int tmp = event.key.key - SDLK_1 + 1;
 	
-					if (event.key.keysym.mod & KMOD_SHIFT)
+					if (event.key.mod & SDL_KMOD_SHIFT)
 					{
 						tmp = tmp + 10;
 					}
@@ -548,23 +550,23 @@ void check_events()
 				key_down = 1;
 				break;
 	
-				case SDLK_z:
-				case SDLK_a:
+				case SDLK_Z:
+				case SDLK_A:
 				key_a = 1;
 				break;
 	
-				case SDLK_x:
-				case SDLK_s:
+				case SDLK_X:
+				case SDLK_S:
 				key_b = 1;
 				break;
 	
-				case SDLK_c:
-				case SDLK_d:
+				case SDLK_C:
+				case SDLK_D:
 				key_c = 1;
 				break;
 	
 				#ifdef ENABLE_DEBUG
-				case SDLK_g:
+				case SDLK_G:
 				debug_flag ^= 1;
 				break;
 				#endif
@@ -578,13 +580,13 @@ void check_events()
 				break;
 	
 				case SDLK_RETURN:
-				if (event.key.keysym.mod & KMOD_ALT)
+				if (event.key.mod & SDL_KMOD_ALT)
 				{
 					toggle_fullscreen();
 				}
 				break;
 	
-				case SDLK_q:
+				case SDLK_Q:
 				key_a = 1;
 				key_reset_record = 1;
 				break;
@@ -593,13 +595,17 @@ void check_events()
 				speed_throttle = 1;
 				break;
 	
+				case SDLK_F12:
+				screenshot();
+				break;
+
 				default:
 				/* keep -Wall happy */
 				break;
 			}
 			break;
 	
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 			leave_game();
 			break;
 		}
@@ -610,13 +616,30 @@ void rest(int fps)
 {
 	if (fastest_flag == 0)
 	{
+		// only set reference
+		if (fps == 0)
+		{
+			last_tick = SDL_GetTicks();
+			last_tick_fp = 0;
+			return;
+		}
+
 		if (speed_throttle == 1)
 		{
 			/* 10 times faster */
 			fps = fps*10;
 		}
 
-		SDL_Delay(1000 / fps);
+		unsigned int diff = ((1000 << 16) / fps) + last_tick_fp;
+		last_tick_fp = diff & 0xffff;
+		diff = diff >> 16;
+		unsigned int current_tick = SDL_GetTicks();
+		while (current_tick - last_tick < diff)
+		{
+			SDL_Delay(1);
+			current_tick = SDL_GetTicks();
+		}
+		last_tick += diff;
 	}
 }
 
@@ -709,6 +732,8 @@ static void run()
 		next_script = 7;
 	}
 
+	rest(0);
+
 	while (cls.quit == 0)
 	{
 		int i;
@@ -780,10 +805,9 @@ static void run()
 			}
 		}
 
-		SDL_UpdateRect(screen, 0, 0, 0, 0);
-                music_update();
+		music_update();
 
-		rest(15);
+		rest(12);
 	}
 }
 
@@ -815,6 +839,8 @@ void sprite_test()
 
 	redraw = 1;
 	set_palette(0x11);
+	rest(0);
+
 	while (cls.quit == 0)
 	{
 		int a4;
@@ -833,13 +859,12 @@ void sprite_test()
 
 			render_sprite(0);
 			render(background);
-			SDL_UpdateRect(screen, 0, 0, 0, 0);
 			redraw = 0;
 			print_sprite(0);
 		}
 
 		check_events();
-		rest(15);
+		rest(12);
 
 		update_keys();
 
@@ -895,17 +920,17 @@ void sprite_test()
 
 static void help()
 {
-	printf("Heart of The Alien Redux %s", VERSION);
+	printf("Heart of The Alien Redux %s\n", HOTA_VERSION);
 	puts("USAGE:");
-	#ifdef DEBUG_ENABLED
+	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
 	#endif
-	puts("\t--iso          use iso and mp3s (in current directory)");
-	puts("\t--double       double size window (608 x 384)");
-	puts("\t--triple       triple size window (912 x 576)");
-	puts("\t--scale=[2|3]  rescale using scale2x or scale3x filters");
+	puts("\t--scale x      rescale by factor <x>");
+	puts("\t--filter       use bilinear filter");
 	puts("\t--fullscreen   start in fullscreen");
-	puts("\t--room n       start from a different room");
+	puts("\t--room n       start from room <n>");
+	puts("\t--iso prefix   use ISO image <prefix.iso>");
+	puts("\t--music prefix use music <prefix.[wav/mp3/ogg/opus/flac]>");
 	puts("\t--sprite-test  run sprite test (use with room)");
 	puts("\t--intro-test   play all animations");
 	puts("\t--fastest      speed throttle");
@@ -914,93 +939,92 @@ static void help()
 	puts("\t--help         this help");
 }
 
-static struct option options[] =
+static struct parg_option options[] =
 {
-	{"debug", no_argument, 0, 'd'},
-	{"room", required_argument, 0, 'r'}, 
-	{"sprite-test", no_argument, &test_flag, 1},
-	{"intro-test", no_argument, &test_flag, 2},
-	{"help", no_argument, 0, 'h'},
-	{"no-sound", no_argument, 0, 'n'},
-	{"fullscreen", no_argument, &fullscreen_flag, 1},
-	{"record", no_argument, &record_flag, 1},
-	{"replay", no_argument, &replay_flag, 1},
-	{"double", no_argument, 0, '2'},
-	{"triple", no_argument, 0, '3'},
-	{"scale", required_argument, 0, 's'},
-	{"iso", no_argument, 0, 'i'},
-	{"fastest", no_argument, &fastest_flag, 1},
-	{0, no_argument, 0, 0}
+	{"debug", PARG_NOARG, &debug_flag, 1},
+	{"room", PARG_REQARG, NULL, 'r'},
+	{"iso", PARG_OPTARG, NULL, 'i'},
+	{"music", PARG_REQARG, NULL, 'm'},
+	{"sprite-test", PARG_NOARG, &test_flag, 1},
+	{"intro-test", PARG_NOARG, &test_flag, 2},
+	{"help", PARG_NOARG, NULL, 'h'},
+	{"no-sound", PARG_NOARG, NULL, 'n'},
+	{"fullscreen", PARG_NOARG, &fullscreen_flag, 1},
+	{"record", PARG_NOARG, &record_flag, 1},
+	{"replay", PARG_NOARG, &replay_flag, 1},
+	{"scale", PARG_REQARG, NULL, 's'},
+	{"filter", PARG_NOARG, NULL, 'f'},
+	{"fastest", PARG_NOARG, &fastest_flag, 1},
+	{0, 0, 0, 0}
 };
 
 int main(int argc, char **argv)
 {
-	int options_index;
-
 	next_script = 0;
 
+	// set default options
 	cls.scale = 1;
 	cls.filtered = 0;
 	cls.fullscreen = 0;
-	cls.use_iso = 0;
 	cls.speed_throttle = 0;
 	cls.paused = 0;
 	cls.nosound = 0;
+	cls.use_iso = false;
+	cls.iso_prefix = NULL;
+	cls.music_prefix = NULL;
 
-	options_index = 0;
-	while (1)
+	// parse CLI options
+	struct parg_state ps;
+	parg_init(&ps);
+	int c;
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:", options, NULL)) != -1)
 	{
-		int c = getopt_long(argc, argv, "hdr:23s:", options, &options_index);
-		if (c == -1)
-		{
-			/* no more options */
-			break;
-		}            
-
 		switch(c)
 		{
-			/* won't do a thing if turned on without ENABLE_DEBUG */
-			case 'd':
-			debug_flag = 1;
-			break;
-
 			case 'r':
-			next_script = atoi(optarg);
+			next_script = atoi(ps.optarg);
 			break;
 
 			case 'h':
 			help();
 			return 0;
 
-			case '2':
-			cls.scale = 2;
-			break;
-
-			case '3':
-			cls.scale = 3;
-			break;
-
 			case 's':
-			cls.scale = atoi(optarg);
-			if (cls.scale != 2 && cls.scale != 3)
+			cls.scale = atoi(ps.optarg);
+			if (cls.scale < 2)
 			{
-				panic("invalid scaler (either 2 or 3)");
+				panic("invalid scale factor");
 				return 1;
 			}
-
-			cls.filtered = 1;
 			break;
 
-			case 'i':
-			cls.use_iso = 1;
+			case 'f':
+			cls.filtered = 1;
 			break;
 
 			case 'n':
 			cls.nosound = 1;
 			break;
 
+			case 'i':
+			cls.use_iso = true;
+			/* manually check for optional argument as next arg */
+			if (ps.optarg == NULL && ps.optind < argc && argv[ps.optind][0] != '-')
+			{
+				ps.optarg = argv[ps.optind++];
+			}
+			if (ps.optarg != NULL)
+			{
+				cls.iso_prefix = strdup(ps.optarg);
+			}
+			break;
+
+			case 'm':
+			cls.music_prefix = strdup(ps.optarg);
+			break;
+
 			case '?':
-			/* invalid argument */
+			panic("invalid argument");
 			return 1;
 		}
 	}

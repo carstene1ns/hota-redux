@@ -1,5 +1,19 @@
-# objects
-*.o
-# executable
-alien
+# build
+/build/
+/build-*/
 
+# save game
+quicksave
+
+# game data
+*.iso
+*.cue
+*.bin
+
+*.BIN
+*.MAC
+*.MAT
+*.SND
+
+*.ogg
+*.mp3

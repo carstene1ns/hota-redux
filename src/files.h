@@ -1,6 +1,7 @@
 /*
- * Heart of The Alien: ISO handling
+ * Heart of The Alien: File/ISO handling
  * Copyright (c) 2004-2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +17,11 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef __CD_ISO__
-#define __CD_ISO__
+#ifndef FILES_H
+#define FILES_H
+
+extern const char *DEFAULT_ISO_PREFIX;
 
 int read_file(const char *filename, void *out);
 
-#endif
+#endif // FILES_H
