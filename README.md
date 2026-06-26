@@ -57,6 +57,7 @@ Moreover, here are extra keys available:
 ## BUILDING
 
 CMake is required: `cmake -B hota`, `cmake --build hota`
+Optionally: `cmake --install hota`
 
 ## BUGS
 

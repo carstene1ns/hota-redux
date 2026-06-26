@@ -20,6 +20,7 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeR
 find_package(SDL3 3.4 REQUIRED)
 find_package(SDL3_mixer REQUIRED)
 
+# main
 add_executable(alien
 	src/main.c
 	src/animation.c src/animation.h
@@ -48,4 +49,14 @@ if(WANT_ASAN)
 	message(STATUS "Building with address sanitizer")
 	target_compile_options(alien PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 	target_link_options(alien PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+# install
+if(UNIX)
+	include(GNUInstallDirs)
+	install(TARGETS alien DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+	install(FILES res/alien.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+	install(FILES res/icon48.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/48x48/apps RENAME alien.png)
+	install(FILES res/icon96.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/96x96/apps RENAME alien.png)
 endif()

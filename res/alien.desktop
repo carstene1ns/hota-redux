@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Heart of The Alien
+;Comment=
+Icon=alien
+Exec=alien
+Terminal=false
+Categories=Game;ActionGame;
+StartupNotify=false
