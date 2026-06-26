@@ -25,7 +25,7 @@
 #include "vm.h"
 #include "lzss.h"
 #include "debug.h"
-#include "cd_iso.h"
+#include "files.h"
 #include "render.h"
 #include "common.h"
 #include "client.h"

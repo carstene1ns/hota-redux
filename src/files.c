@@ -1,6 +1,7 @@
 /*
- * Heart of The Alien: ISO handling
+ * Heart of The Alien: Files/ISO handling
  * Copyright (c) 2004-2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,11 +19,13 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include "debug.h"
 #include "client.h"
-#include "cd_iso.h"
+#include "files.h"
 
-static char *ISO_FILENAME = "Heart Of The Alien (U).iso";
+// default iso name
+const char *DEFAULT_ISO_PREFIX = "Heart Of The Alien (U)";
 
 typedef struct file_offset_s
 {
@@ -54,7 +57,7 @@ static file_offset_t file_offsets[] =
 	{"ROOMS8.BIN", 0x870000, 0x5a800}
 };
 
-static int get_file_offset(const char *filename, int *offset, int *size)
+static int get_file_info(const char *filename, int *offset, int *size)
 {
 	int p, elements;
 
@@ -75,9 +78,7 @@ static int get_file_offset(const char *filename, int *offset, int *size)
 
 static int read_file_internal(const char *filename, int size, int offset, void *out)
 {
-	FILE *fp;
-
-	fp = fopen(filename, "rb");
+	FILE *fp = fopen(filename, "rb");
 	if (fp == NULL)
 	{
 		LOG(("read_file: error opening file %s\n", filename));
@@ -88,7 +89,8 @@ static int read_file_internal(const char *filename, int size, int offset, void *
 	if (fread(out, size, 1, fp) != 1)
 	{
 		fclose(fp);
-		LOG(("read_file: error reading file %d bytes from offset 0x%x\n", size, offset));
+		LOG(("read_file: error reading file %s: %d bytes from offset 0x%x\n",
+			filename, size, offset));
 		return -1;
 	}
 
@@ -98,17 +100,40 @@ static int read_file_internal(const char *filename, int size, int offset, void *
 
 int read_file(const char *filename, void *out)
 {
+	/* get file info */
 	int size, offset;
-	char archive[256];
-	
-	if (get_file_offset(filename, &offset, &size) < 0)
+	if (get_file_info(filename, &offset, &size) < 0)
 	{
-		/* not found */
-		LOG(("read_file: %s not found\n", filename));
+		/* not a known file */
+		LOG(("read_file: %s not known\n", filename));
 		return -1;
 	}
 
-	strcpy(archive, ISO_FILENAME);
+	if (cls.use_iso)
+	{
+		/* open iso image */
+		char archive[256];
+		if(cls.iso_prefix)
+		{
+			strcpy(archive, cls.iso_prefix);
+		}
+		else
+		{
+			strcpy(archive, DEFAULT_ISO_PREFIX);
+		}
+		strcat(archive, ".iso");
 
-	return read_file_internal(archive, size, offset, out);
+		LOG(("reading %s file from iso\n", filename));
+		return read_file_internal(archive, size, offset, out);
+	}
+	else if(access(filename, R_OK) == 0)
+	{
+		/* if loose file exists */
+		LOG(("using %s file directly\n", filename));
+		return read_file_internal(filename, size, 0, out);
+	}
+
+	/* not found */
+	LOG(("read_file: %s not found\n", filename));
+	return -1;
 }

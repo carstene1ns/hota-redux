@@ -5,8 +5,8 @@
 Thank you for downloading Heart of The Alien Redux! 
 This rewrite brings the wonderful game to modern computers and consoles. 
 
-For more information, please visit the project homepage at
-http://hota.sourceforge.net/
+For more information, please visit the original project homepage at
+https://hota.sf.net/
 
 ## NOTE
 
@@ -22,16 +22,22 @@ it plays the introduction, and then pops up the code entry screen.
 Running `alien -h` will display a list of acceptable parameters. 
 Here are some interesting settings:
 
-* `--scale` `x`    scale window
-* `--filter`       use bilinear filter
-* `--fullscreen`   start in fullscreen
-* `--room` `n`     start from script n
-* `--record`       record your key pressed
-* `--replay`       replay recorded sequence
-* `--fastest`      play game as fast as possible
- 
-* `--intro-test`   play all animations
-* `--sprite-test`  show sprites in the current script
+* `--scale` `x`      scale window by x
+* `--filter`         use bilinear filter
+* `--fullscreen`     start in fullscreen
+* `--iso` [`prefix`] use ISO file for game data
+                     (default: "Heart Of The Alien (U)")
+* `--music` `prefix` use this prefix for wav/mp3/ogg/opus/flac music
+                     (default: iso prefix)
+* `--room` `n`       start from script n
+* `--record`         record your key pressed
+* `--replay`         replay recorded sequence
+* `--fastest`        play game as fast as possible
+
+These are developer only:
+* `--debug`          write a lot of debug messages
+* `--intro-test`     play all animations
+* `--sprite-test`    show sprites in the current script
 
 ## KEYS
 
@@ -79,7 +85,7 @@ record your keys and attach ``recorded-keys'', or attach a
 
 ## LINKS
 
-* Homepage: http://hota.sourceforge.net
+* Homepage: https://hota.sourceforge.net
 * Bugs and Requests: http://www.sourceforge.net/projects/hota/
 * My wiki entry: http://www.megidish.net/wiki/index.php?title=Heart_of_The_Alien
 * MobyGames entry: http://segacd.mobygames.com/game/sheet/gameId,8140/

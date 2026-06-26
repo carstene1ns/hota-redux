@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <memory.h>
 #include "debug.h"
-#include "cd_iso.h"
+#include "files.h"
 #include "game2bin.h"
 
 #define GAME2BIN_SIZE 409600

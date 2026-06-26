@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: Renderer
  * Copyright (c) 2004 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

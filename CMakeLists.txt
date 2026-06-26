@@ -24,11 +24,11 @@ add_executable(alien
 	src/main.c
 	src/animation.c src/animation.h
 	src/audio.c src/audio.h
-	src/cd_iso.c src/cd_iso.h
 	src/client.c src/client.h
 	src/common.c src/common.h
 	src/debug.c src/debug.h
 	src/decode.c src/decode.h
+	src/files.c src/files.h
 	src/game2bin.c src/game2bin.h
 	src/lzss.c src/lzss.h
 	src/parg.c src/parg.h

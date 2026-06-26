@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: Game loop and main
  * Copyright (c) 2004-2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +32,7 @@
 #include "debug.h"
 #include "audio.h"
 #include "common.h"
-#include "cd_iso.h"
+#include "files.h"
 #include "decode.h"
 #include "render.h"
 #include "screen.h"
@@ -129,10 +130,19 @@ static int load_room(int index)
 
 /** atexit() callback
 */
-static void atexit_callback(void)
+static void atexit_callback()
 {
 	audio_done();
 	SDL_Quit();
+
+	if(cls.iso_prefix != NULL)
+	{
+		free(cls.iso_prefix);
+	}
+	if(cls.music_prefix != NULL)
+	{
+		free(cls.music_prefix);
+	}
 }
 
 static int initialize()
@@ -911,10 +921,12 @@ static void help()
 	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
 	#endif
-	puts("\t--scale x      rescale by factor x");
+	puts("\t--scale x      rescale by factor <x>");
 	puts("\t--filter       use bilinear filter");
 	puts("\t--fullscreen   start in fullscreen");
-	puts("\t--room n       start from a different room");
+	puts("\t--room n       start from room <n>");
+	puts("\t--iso prefix   use ISO image <prefix.iso>");
+	puts("\t--music prefix use music <prefix.[wav/mp3/ogg/opus/flac]>");
 	puts("\t--sprite-test  run sprite test (use with room)");
 	puts("\t--intro-test   play all animations");
 	puts("\t--fastest      speed throttle");
@@ -926,7 +938,9 @@ static void help()
 static struct parg_option options[] =
 {
 	{"debug", PARG_NOARG, &debug_flag, 1},
-	{"room", PARG_REQARG, NULL, 'r'}, 
+	{"room", PARG_REQARG, NULL, 'r'},
+	{"iso", PARG_OPTARG, NULL, 'i'},
+	{"music", PARG_REQARG, NULL, 'm'},
 	{"sprite-test", PARG_NOARG, &test_flag, 1},
 	{"intro-test", PARG_NOARG, &test_flag, 2},
 	{"help", PARG_NOARG, NULL, 'h'},
@@ -951,12 +965,15 @@ int main(int argc, char **argv)
 	cls.speed_throttle = 0;
 	cls.paused = 0;
 	cls.nosound = 0;
+	cls.use_iso = false;
+	cls.iso_prefix = NULL;
+	cls.music_prefix = NULL;
 
 	// parse CLI options
 	struct parg_state ps;
 	parg_init(&ps);
 	int c;
-	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:f", options, NULL)) != -1)
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:", options, NULL)) != -1)
 	{
 		switch(c)
 		{
@@ -983,6 +1000,23 @@ int main(int argc, char **argv)
 
 			case 'n':
 			cls.nosound = 1;
+			break;
+
+			case 'i':
+			cls.use_iso = true;
+			/* manually check for optional argument as next arg */
+			if (ps.optarg == NULL && ps.optind < argc && argv[ps.optind][0] != '-')
+			{
+				ps.optarg = argv[ps.optind++];
+			}
+			if (ps.optarg != NULL)
+			{
+				cls.iso_prefix = strdup(ps.optarg);
+			}
+			break;
+
+			case 'm':
+			cls.music_prefix = strdup(ps.optarg);
 			break;
 
 			case '?':

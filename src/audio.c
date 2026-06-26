@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: SFX handling
  * Copyright (c) 2004-2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +19,7 @@
  */
 #include <SDL3/SDL.h>
 #include <SDL3_mixer/SDL_mixer.h>
-
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -27,14 +28,11 @@
 #include "common.h"
 #include "vm.h"
 #include "client.h"
-#include "cd_iso.h"
+#include "files.h"
 
 static MIX_Mixer *mixer;
 static MIX_Track *music;
 static MIX_Track *sounds[4];
-
-/** (The Underdogs version of) Heart of The Alien's tracks are formatted like this */
-#define ISO_PREFIX "Heart Of The Alien (U) "
 
 /** Stops all 4 channels
 */
@@ -178,8 +176,49 @@ void play_music_track(int track, int loop)
 
 		stop_music();
 
-		sprintf(filename, ISO_PREFIX "%02d.mp3", track + 1);
-		LOG(("playing mp3 %s\n", filename));
+		const char *ptr;
+		if(cls.music_prefix != NULL)
+		{
+			ptr = cls.music_prefix;
+		}
+		else if(cls.iso_prefix != NULL)
+		{
+			ptr = cls.iso_prefix;
+		}
+		else
+		{
+			ptr = DEFAULT_ISO_PREFIX;
+		}
+
+		#define NUM_EXT 5
+		static int index = -1;
+		static const char* extensions[NUM_EXT] = { "wav", "mp3", "ogg", "opus", "flac" };
+
+		if(index > -1)
+		{
+			/* shortcut if at least one music file was found earlier */
+			sprintf(filename, "%s %02d.%s", ptr, track + 1, extensions[index]);
+		}
+		else
+		{
+			/* search for valid music files */
+			for (int i = 0; i <= NUM_EXT; i++)
+			{
+				sprintf(filename, "%s %02d.%s", ptr, track + 1, extensions[i]);
+				if (access(filename, R_OK) == 0)
+				{
+					index = i;
+					break;
+				}
+				else if (i == NUM_EXT - 1)
+				{
+					LOG(("music %d not found!\n", track + 1));
+					return;
+				}
+			}
+		}
+		#undef NUM_EXT
+		LOG(("playing music %s\n", filename));
 
 		MIX_Audio *a = MIX_LoadAudio(mixer, filename, false);
 		MIX_SetTrackAudio(music, a);

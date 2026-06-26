@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: Music/SFX handling
  * Copyright (c) 2004-2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef __AUDIO_INCLUDED__
-#define __AUDIO_INCLUDED__
+#ifndef AUDIO_H
+#define AUDIO_H
 
 /** Initialize audio module
     @returns zero on success, negative value on error
@@ -55,4 +56,4 @@ void music_update();
 */
 void play_music_track(int track, int loop);
 
-#endif
+#endif // AUDIO_H

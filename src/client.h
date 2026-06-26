@@ -1,6 +1,7 @@
 /*
  * Heart of The Alien: client static
  * Copyright (c) 2005 Gil Megidish
+ * Copyright (c) 2016-2026 carstene1ns
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +17,10 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef __CLIENT_INCLUDED__
-#define __CLIENT_INCLUDED__
+#ifndef CLIENT_H
+#define CLIENT_H
+
+#include <stdbool.h>
 
 typedef struct
 {
@@ -29,8 +32,11 @@ typedef struct
 	int fullscreen;
 	int speed_throttle;
 	int filtered;
+	bool use_iso;
+	char *iso_prefix;
+	char *music_prefix;
 } client_static_t;
 
 extern client_static_t cls;
 
-#endif
+#endif // CLIENT_H
