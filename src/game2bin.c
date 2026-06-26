@@ -55,10 +55,10 @@ int game2bin_init()
 {
 	if (read_file("GAME2.BIN", game2bin) < 0)
 	{
-		LOG(("failure reading game2bin file\n"));
+		LOG_FILE("failure reading game2bin file\n");
 		return -1;
 	}
 	
-	LOG(("success reading game2bin file\n"));
+	LOG_FILE("success reading game2bin file\n");
 	return 0;
 }

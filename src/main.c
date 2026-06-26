@@ -113,7 +113,7 @@ static int load_room(int index)
 	strcpy(filename, "ROOMS0.BIN");
 	filename[5] = (index + '0');
 
-	LOG(("loading %s\n", filename));
+	LOG_MAIN("loading %s\n", filename);
 	ptr = get_memory_ptr(0xf900);
 	if (read_file(filename, ptr) < 0)
 	{
@@ -121,7 +121,7 @@ static int load_room(int index)
 	}
 
 	script_ptr = get_long(0xf900);
-	LOG(("script ptr %x\n", script_ptr));
+	LOG_MAIN("script ptr %x\n", script_ptr);
 
 	sound_flush_cache();
 
@@ -187,7 +187,7 @@ void load_room_screen(int room, int index)
 	int i;
 	unsigned char *pixels;
 
-	LOG(("loading room screen %d from room file %d\n", index - 1, room));
+	LOG_MAIN("loading room screen %d from room file %d\n", index - 1, room);
 
 	unpack_room(scratchpad, index - 1);           
 
@@ -229,7 +229,7 @@ void read_keys_from_record()
 	if (c == EOF)
 	{
 		c = 0;
-		LOG(("ERROR: record file ended!\n"));
+		ERROR("record file ended!\n");
 	}
 
 	key_up = (c >> 7) & 1;
@@ -528,6 +528,22 @@ void check_events()
 					sprites[tmp].u1 ^= 0x80;
 				}
 				break;
+
+				/* enable/disable debug messages */
+				case SDLK_KP_1:
+				case SDLK_KP_2:
+				case SDLK_KP_3:
+				case SDLK_KP_4:
+				case SDLK_KP_5:
+				case SDLK_KP_6:
+				case SDLK_KP_7:
+				case SDLK_KP_8:
+				//case SDLK_KP_9:
+				{
+					int tmp = event.key.key - SDLK_KP_1 + 1;
+					debug_flag ^= 1<<tmp;
+				}
+				break;
 				#endif
 	
 				case SDLK_ESCAPE:
@@ -565,11 +581,9 @@ void check_events()
 				key_c = 1;
 				break;
 	
-				#ifdef ENABLE_DEBUG
-				case SDLK_G:
-				debug_flag ^= 1;
+				case SDLK_F:
+				toggle_filter();
 				break;
-				#endif
 	
 				case SDLK_F5:
 				quicksave();
@@ -743,7 +757,7 @@ static void run()
 			current_room = next_script;
 			reset_sprite_list();
 			init_tasks();
-			LOG(("loading room %d\n", current_room));
+			LOG_MAIN("loading room %d\n", current_room);
 			load_room(current_room);
 			next_script = 0;
 		}
@@ -762,7 +776,7 @@ static void run()
 			add_keys_to_record();
 		}
 	
-		LOG(("*new frame*\n"));
+		LOG_MAIN("*new frame*\n");
 
 		for (i=0; i<MAX_TASKS; i++)
 		{
@@ -793,9 +807,9 @@ static void run()
 			{
 				toggle_aux(0);
 				set_aux_bank(i);
-				LOG(("task %d starts at 0x%x\n", i, pc));
+				LOG_TASK("task %d starts at 0x%x\n", i, pc);
 				task_pc[i] = decode(i, pc);
-				LOG(("task %d ended at 0x%x\n", i, pc));
+				LOG_TASK("task %d ended at 0x%x\n", i, pc);
 			}
 
 			if (next_script != 0)

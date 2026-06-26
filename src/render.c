@@ -186,8 +186,22 @@ void toggle_fullscreen()
 	}
 	else
 	{
-		LOG(("setting fullscreen mode\n"));
+		LOG_D("setting fullscreen mode\n");
 		SDL_HideCursor();
+	}
+}
+
+void toggle_filter()
+{
+	cls.filtered = !cls.filtered;
+
+	if (cls.filtered)
+	{
+		SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+	}
+	else
+	{
+		SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_PIXELART);
 	}
 }
 

@@ -81,7 +81,7 @@ static int read_file_internal(const char *filename, int size, int offset, void *
 	FILE *fp = fopen(filename, "rb");
 	if (fp == NULL)
 	{
-		LOG(("read_file: error opening file %s\n", filename));
+		LOG_FILE("read_file: error opening file %s\n", filename);
 		return -1;
 	}
 
@@ -89,8 +89,8 @@ static int read_file_internal(const char *filename, int size, int offset, void *
 	if (fread(out, size, 1, fp) != 1)
 	{
 		fclose(fp);
-		LOG(("read_file: error reading file %s: %d bytes from offset 0x%x\n",
-			filename, size, offset));
+		LOG_FILE("read_file: error reading file %s: %d bytes from offset 0x%x\n",
+			filename, size, offset);
 		return -1;
 	}
 
@@ -105,7 +105,7 @@ int read_file(const char *filename, void *out)
 	if (get_file_info(filename, &offset, &size) < 0)
 	{
 		/* not a known file */
-		LOG(("read_file: %s not known\n", filename));
+		LOG_FILE("read_file: %s not known\n", filename);
 		return -1;
 	}
 
@@ -123,17 +123,17 @@ int read_file(const char *filename, void *out)
 		}
 		strcat(archive, ".iso");
 
-		LOG(("reading %s file from iso\n", filename));
+		LOG_FILE("reading %s file from iso\n", filename);
 		return read_file_internal(archive, size, offset, out);
 	}
 	else if(access(filename, R_OK) == 0)
 	{
 		/* if loose file exists */
-		LOG(("using %s file directly\n", filename));
+		LOG_FILE("using %s file directly\n", filename);
 		return read_file_internal(filename, size, 0, out);
 	}
 
 	/* not found */
-	LOG(("read_file: %s not found\n", filename));
+	LOG_FILE("read_file: %s not found\n", filename);
 	return -1;
 }

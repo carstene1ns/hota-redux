@@ -54,7 +54,7 @@ void fill_line_reversed(int count, int x, int y, int color)
 
 	if (x < 0 || y < 0 || y > 191)
 	{
-		LOG(("out of screen\n"));
+		WARN("out of screen\n");
 		return;
 	}
 
@@ -81,12 +81,12 @@ void fill_line(int count, int x, int y, int color)
 {
 	unsigned char *bufp;
 
-	//LOG(("fill line count=%d, x=%d, y=%d, color=%d\n", count, x, y, color));
+	LOG_SCREEN("fill line count=%d, x=%d, y=%d, color=%d\n", count, x, y, color);
 
 	/* output offset */
 	if (x > 303 || y > 191 || y < 0)
 	{
-		LOG(("WARN: out of screen! (x=%d, y=%d)\n", x, y));
+		WARN("out of screen! (x=%d, y=%d)\n", x, y);
 		return;
 	}
 
@@ -137,7 +137,7 @@ void copy_screen(int dest, int src)
 	src_surface = get_screen_ptr(masked_src);
 	dest_surface = get_screen_ptr(masked_dest);
 
-	LOG(("copying surface %x onto %x\n", (unsigned)src_surface, (unsigned)dest_surface));
+	LOG_SCREEN("copying surface %x onto %x\n", (unsigned)src_surface, (unsigned)dest_surface);
 	memcpy(dest_surface, src_surface, 304*192);
 }
 

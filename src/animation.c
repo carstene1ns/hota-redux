@@ -30,10 +30,8 @@
 #include "common.h"
 #include "client.h"
 
-///////
-void check_events();
-void rest(int fps);
-
+extern void check_events();
+extern void rest(int fps);
 extern void update_keys();
 
 /* used for 4->8 bit conversion */
@@ -59,7 +57,7 @@ static void draw_pixel(char *out, int offset, int color)
 {
 	if (offset >= 304*192)
 	{
-		LOG(("out of screen %d\n", offset));
+		LOG_ANIM("out of screen %d\n", offset);
 		return;
 	}
 
@@ -309,7 +307,7 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 				count = (count >> 4) + 2;
 				d4++;
 	
-				LOG(("block offset=%d w=%d h=%d color=%d\n", offset, count, d4, color));
+				LOG_ANIM("block offset=%d w=%d h=%d color=%d\n", offset, count, d4, color);
 	
 				do
 				{
@@ -334,7 +332,7 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 				offset = (offset << 8) | get_byte(a1++);
 				count = get_byte(a1++) + 1;
 	
-				LOG(("horizontal line offset=%d count=%d\n", offset, count));
+				LOG_ANIM("horizontal line offset=%d count=%d\n", offset, count);
 				fillline(out, offset, count, color); 
 			}
 		}
@@ -353,7 +351,7 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 				offset = (offset << 8) | get_byte(a1++);
 				count = get_byte(a1++);
 	
-				LOG(("vertical line offset=%d count=%d\n", offset, count));
+				LOG_ANIM("vertical line offset=%d count=%d\n", offset, count);
 	
 				while (count >= 0)
 				{
@@ -701,7 +699,7 @@ int play_sequence(int offset, int fps)
 	}
 
 	set_variable(255, 100);
-	// a4 = screen0
+	a4 = 0;
 	d0 = 0;
 	d1 = 0;
 	a1 += 2;
@@ -712,7 +710,7 @@ int play_sequence(int offset, int fps)
 	/* clr.b   ($C0401).l */
 	copy_to_screen(a4);
 	post_render(fps);
-	/* LOG(("d1d4\n")); */
+	/* LOG_ANIM("d1d4\n"); */
 	a4 += d0;
 	d1--;
 	if (d1 >= 0)
@@ -866,14 +864,14 @@ int play_animation(const char *filename, int fileoffset)
 	int stop;
 	unsigned char *ptr;
 
-	LOG(("playing animation %s\n", filename));
+	LOG_ANIM("playing animation %s\n", filename);
 
 	/* animations are loaded into a fixed place in 68000 memory */
 	read_offset = 0x809a - fileoffset;
 	ptr = get_memory_ptr(read_offset);
 	if (read_file(filename, ptr) < 0)
 	{
-		LOG(("play_animation: unable to read %s\n", filename));
+		LOG_ANIM("play_animation: unable to read %s\n", filename);
 		return -1;
 	}
 
@@ -918,6 +916,6 @@ int play_animation(const char *filename, int fileoffset)
 	/* just in case, clean variable 250 (key_a pressed) */
 	set_variable(250, 0);
 
-	LOG(("leaving animation player\n"));
+	LOG_ANIM("leaving animation player\n");
 	return stop;
 }

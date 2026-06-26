@@ -25,11 +25,11 @@ void print_hex(unsigned char *ptr, int length)
 {
 	while (length > 0)
 	{
-		LOG(("%02x ", *ptr++));
+		LOG_D("%02x ", *ptr++);
 		length--;
 	}
 
-	LOG(("\n"));
+	LOG_D("\n");
 }
 
 void mark_opcode(int opcode)
@@ -40,15 +40,15 @@ void mark_opcode(int opcode)
 	{
 		marked_opcodes[opcode] = 1;
 
-		LOG(("opcodes used: "));
+		//LOG_D("opcodes used: ");
 		for (i=0; i<256; i++)
 		{
 			if (marked_opcodes[i])
 			{
-				LOG(("%02x ", i));
+				//LOG_D("%02x ", i);
 			}
 		}
 
-		LOG(("\n"));
+		//LOG_D("\n");
 	}
 }

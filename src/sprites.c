@@ -44,19 +44,19 @@ sprite_t sprites[64];
 */
 void print_sprite(int p)
 {
-	LOG(("sprite %d\n", p));
-	LOG(("\tindex: %d\n", sprites[p].index));
-	LOG(("\tu1: %d\n", sprites[p].u1));
-	LOG(("\tnext: %d\n", sprites[p].next));
-	LOG(("\tframe: %d\n", sprites[p].frame));
-	LOG(("\tx: %d\n", sprites[p].x));
-	LOG(("\ty: %d\n", sprites[p].y));
-	LOG(("\tu2: %d\n", sprites[p].u2));
-	LOG(("\tu3: %d\n", sprites[p].u3));
-	LOG(("\tw4: %d\n", sprites[p].w4));
-	LOG(("\tw5: %d\n", sprites[p].w5));
-	LOG(("\tu6: %d\n", sprites[p].u6));
-	LOG(("\tu7: %d\n", sprites[p].u7));
+	LOG_SPRITE("sprite %d\n", p);
+	LOG_SPRITE("\tindex: %d\n", sprites[p].index);
+	LOG_SPRITE("\tu1: %d\n", sprites[p].u1);
+	LOG_SPRITE("\tnext: %d\n", sprites[p].next);
+	LOG_SPRITE("\tframe: %d\n", sprites[p].frame);
+	LOG_SPRITE("\tx: %d\n", sprites[p].x);
+	LOG_SPRITE("\ty: %d\n", sprites[p].y);
+	LOG_SPRITE("\tu2: %d\n", sprites[p].u2);
+	LOG_SPRITE("\tu3: %d\n", sprites[p].u3);
+	LOG_SPRITE("\tw4: %d\n", sprites[p].w4);
+	LOG_SPRITE("\tw5: %d\n", sprites[p].w5);
+	LOG_SPRITE("\tu6: %d\n", sprites[p].u6);
+	LOG_SPRITE("\tu7: %d\n", sprites[p].u7);
 }
 
 short get_sprite_data_word(int entry, int i)
@@ -78,7 +78,7 @@ short get_sprite_data_word(int entry, int i)
 		return sprites[entry].w5;
 
 		default:
-		LOG(("get_sprite_data_word on %d\n", i));
+		LOG_SPRITE("get_sprite_data_word on %d\n", i);
 		assert(0);
 		return 0;
 	}
@@ -93,7 +93,7 @@ void set_sprite_data_word(int entry, int i, short value)
 {
 	assert(i >= 0 && i <= 15);
 
-	LOG(("set_sprite_data_word(entry=%d, i=%d, value=%d)\n", entry, i, value));
+	LOG_SPRITE("set_sprite_data_word(entry=%d, i=%d, value=%d)\n", entry, i, value);
 
 	switch(i)
 	{
@@ -114,7 +114,7 @@ void set_sprite_data_word(int entry, int i, short value)
 		break;
 
 		default:
-		LOG(("set_sprite_data_word on %d value %d\n", i, value));
+		LOG_SPRITE("set_sprite_data_word on %d value %d\n", i, value);
 		assert(0);
 	}
 }
@@ -149,7 +149,7 @@ unsigned char get_sprite_data_byte(int entry, int i)
 		return sprites[entry].u7;
 
 		default:
-		LOG(("get_sprite_data_byte on %d\n", i));
+		LOG_SPRITE("get_sprite_data_byte on %d\n", i);
 		assert(0);
 		return 0;
 	}
@@ -159,7 +159,7 @@ void set_sprite_data_byte(int entry, int i, unsigned char value)
 {
 	assert(i >= 0 && i <= 15);
 
-	LOG(("set_sprite_data_byte(entry=%d, i=%d, value=%d)\n", entry, i, value));
+	LOG_SPRITE("set_sprite_data_byte(entry=%d, i=%d, value=%d)\n", entry, i, value);
 
 	switch(i)
 	{
@@ -188,7 +188,7 @@ void set_sprite_data_byte(int entry, int i, unsigned char value)
 		break;
 
 		default:
-		LOG(("set_sprite_data_byte on %d to %d\n", i, value));
+		LOG_SPRITE("set_sprite_data_byte on %d to %d\n", i, value);
 		assert(0);
 	}
 }
@@ -504,7 +504,7 @@ void render_sprite(int list_entry)
 */
 void draw_sprites()
 {
-	LOG(("draw_sprites"));
+	LOG_SPRITE("draw_sprites");
 
 	if (sprite_count != 0)
 	{
@@ -525,7 +525,7 @@ void draw_sprites()
 				break;
 			}
 
-			LOG(("linkedup to %d\n", d1));
+			LOG_SPRITE("linkedup to %d\n", d1);
 		}
 	}
 }

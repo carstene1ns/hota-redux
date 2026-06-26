@@ -72,7 +72,7 @@ void play_sample(int index, int volume, int channel)
 	}
 
 	index = index - 1;
-	LOG(("playing sample %d, volume %d, channel %d\n", index, volume, channel));
+	LOG_AUDIO("playing sample %d, volume %d, channel %d\n", index, volume, channel);
 
 	int sample_ptr = get_long(0xf90c);
 	int ptr = get_long(sample_ptr + index * 4);
@@ -80,7 +80,7 @@ void play_sample(int index, int volume, int channel)
 
 	/* length plus some unknown flags */
 	ptr = ptr + 8;
-	LOG(("sample data starts at 0x%x, length is %d\n", ptr, length));
+	LOG_AUDIO("sample data starts at 0x%x, length is %d\n", ptr, length);
 
 	/* convert from 8000 mono 8bit, to 44100 stereo 16bit */
 	char *buffer = SDL_malloc(length);
@@ -212,13 +212,13 @@ void play_music_track(int track, int loop)
 				}
 				else if (i == NUM_EXT - 1)
 				{
-					LOG(("music %d not found!\n", track + 1));
+					WARN("music %d not found!\n", track + 1);
 					return;
 				}
 			}
 		}
 		#undef NUM_EXT
-		LOG(("playing music %s\n", filename));
+		LOG_AUDIO("playing music %s\n", filename);
 
 		MIX_Audio *a = MIX_LoadAudio(mixer, filename, false);
 		MIX_SetTrackAudio(music, a);

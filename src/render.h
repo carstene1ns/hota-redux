@@ -33,6 +33,7 @@ void set_palette(int which);
 void set_palette_rgb12(unsigned char *rgb12);
 
 void toggle_fullscreen();
+void toggle_filter();
 
 int get_current_palette();
 
