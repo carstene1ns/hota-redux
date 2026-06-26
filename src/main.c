@@ -595,6 +595,10 @@ void check_events()
 				speed_throttle = 1;
 				break;
 	
+				case SDLK_F12:
+				screenshot();
+				break;
+
 				default:
 				/* keep -Wall happy */
 				break;

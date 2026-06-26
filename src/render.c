@@ -247,3 +247,8 @@ int render_create_surface()
 
 	return 0;
 }
+
+void screenshot()
+{
+	SDL_SavePNG(surface, "hota-screenshot.png");
+}

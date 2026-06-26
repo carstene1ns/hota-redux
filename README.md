@@ -1,5 +1,8 @@
 # Heart of The Alien Redux
 
+[![shot1](res/thumb1.png)](res/shot1.png)
+[![shot2](res/thumb2.png)](res/shot2.png)
+
 2004-2005 (c) Gil Megidish (gil at megidish dot net)
 
 Thank you for downloading Heart of The Alien Redux! 

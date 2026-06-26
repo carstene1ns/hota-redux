@@ -36,4 +36,6 @@ void toggle_fullscreen();
 
 int get_current_palette();
 
+void screenshot();
+
 #endif // RENDER_H
